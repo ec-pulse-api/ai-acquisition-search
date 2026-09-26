@@ -164,12 +164,12 @@ function createServer(): McpServer {
           if (platforms.includes("instagram") && process.env.META_ACCESS_TOKEN && process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID) {
             const result = await publishInstagramReel({ videoUrl, caption });
             publishResults.push({ platform: "instagram", ...result });
-            if (result.id) posts.push({ platform: "instagram", postId: result.id, publishedAt: new Date().toISOString() });
+            if (result.mediaId) posts.push({ platform: "instagram", postId: result.mediaId, publishedAt: new Date().toISOString() });
           }
           if (platforms.includes("facebook") && process.env.META_ACCESS_TOKEN && process.env.FACEBOOK_PAGE_ID) {
             const result = await publishFacebookReel({ videoUrl, caption });
             publishResults.push({ platform: "facebook", ...result });
-            if (result.id) posts.push({ platform: "facebook", postId: result.id, publishedAt: new Date().toISOString() });
+            if (result.videoId) posts.push({ platform: "facebook", postId: result.videoId, publishedAt: new Date().toISOString() });
           }
           if (platforms.includes("x") && process.env.X_ACCESS_TOKEN) {
             const result = await publishXPost({ text: caption });
