@@ -45,6 +45,7 @@ export default function Home() {
       <Section title="04 競合分析"><h2>{result.analysis.competitors.summary}</h2><List items={result.analysis.competitors.signals}/></Section>
       <Section title="05 実績分析"><h2>{result.analysis.performance.summary}</h2><List items={[...result.analysis.performance.availableEvidence,...result.analysis.performance.missingData.map(x=>"不足: "+x)]}/></Section>
       <section className="next"><p className="eyebrow">NEXT ACTION</p><h2>次にやるべき集客</h2><div className="action-list">{result.analysis.priorities.map(x=><article key={x.priority}><b>#{x.priority}</b><div><strong>{x.action}</strong><p>{x.reason}</p><small>{x.channel}</small></div></article>)}</div></section>
+      <section className="next"><p className="eyebrow">NEXT POSTS</p><h2>次に出す投稿</h2><div className="action-list">{result.analysis.nextPosts.map(x=><article key={x.rank}><b>#{x.rank}</b><div><strong>{x.concept}</strong><p><b>HOOK</b>　{x.hook}</p><p>{x.reason}</p><small>{x.channel} · {x.format} · 検証: {x.testMetric}</small></div></article>)}</div></section>
       <Section title="集客課題"><List items={result.analysis.acquisitionProblems}/></Section>
       <Section title="集客機会"><List items={result.analysis.opportunities}/></Section>
       <Section title="すぐやること"><List items={result.analysis.nextActions}/></Section>
