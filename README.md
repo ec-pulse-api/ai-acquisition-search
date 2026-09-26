@@ -174,7 +174,7 @@ APIキーはサーバー側だけで管理し、Gitにコミットしません�
 
 ## TikTok自動投稿
 
-TikTokは公式Content Posting APIのDirect Postを使います。投稿にはTikTok側のアプリ登録、Content Posting API、認可済みユーザーの `video.publish` 権限が必要です。未監査クライアントの投稿はTikTokの仕様上、テスト中は非公開に制限される場合があります。citeturn0search0turn0search6
+TikTokは公式Content Posting APIのDirect Postを使います。投稿にはTikTok側のアプリ登録、Content Posting API、認可済みユーザーの `video.publish` 権限が必要です。未監査クライアントの投稿はTikTokの仕様上、テスト中は非公開に制限される場合があります。
 
 環境変数:
 
@@ -188,6 +188,6 @@ MCPツール:
 - `tiktok-publish` — HTTPS動画URLをDirect Post
 - `tiktok-publish-status` — publish_idの処理状態を確認
 
-動画URL方式を使う場合、TikTokから取得可能なHTTPS公開URLが必要です。AI生成動画は `is_aigc=true` を既定値として送信します。citeturn0search0turn0search6
+動画URL方式を使う場合、TikTokから取得可能なHTTPS公開URLが必要です。AI生成動画は `is_aigc=true` を既定値として送信します。
 
-次のSNSも同じ構造で公式APIを接続します。YouTubeは `videos.insert` によるアップロードが公式に提供されています。citeturn0search10
+次のSNSも同じ構造で公式APIを接続します。YouTubeは `videos.insert` によるアップロードが公式に提供されています。
