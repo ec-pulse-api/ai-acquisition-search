@@ -1,6 +1,6 @@
 import type { PageSnapshot } from "./types";
 import type { WebSearchResult } from "./search-web";
-import type { SocialSignal } from "./social-search";
+import type { SocialSignal } from "./social-search";\nimport type { ShopSignal } from "./shop-search";
 
 export function buildAcquisitionPrompt(
   source: PageSnapshot,
@@ -27,7 +27,7 @@ export function buildAcquisitionPrompt(
       " comments=" + x.comments + " shares=" + x.shares +
       "\nURL: " + x.url
     ).join("\n"),
-    "SNSデータは反応の仮説を作るための観測値です。数値だけで売上を保証せず、投稿内容と指標を分けて評価してください。",
+    "TikTok Shop競合商品データ:\\n" + shopSignals.map((x, i) => "[" + (i + 1) + "] " + x.title + " / seller=" + x.seller + " / price=" + x.price + " " + x.currency + " / sales=" + x.sales + " / rating=" + x.rating + " / reviews=" + x.reviewCount + "\\nURL: " + x.url).join("\\n") + "\\n" +\n    "TikTok Shopデータは競合・価格・販売量の仮説を作るための観測値です。未取得値は事実として補完しないでください。\\n" +\n    "SNSデータは反応の仮説を作るための観測値です。数値だけで売上を保証せず、投稿内容と指標を分けて評価してください。",
     "検索結果は発見材料です。category は customer_pain / customer_desire / competitor / market / channel の5分類です。各判断では関連するcategoryの結果を優先し、確認できないことを事実として断定しないでください。",
     "JSONのみで返してください。product, market, customer, competitors, performance, acquisitionProblems, opportunities, priorities, nextActions, decision, nextPosts, searchEvidenceを必ず含めてください。",
     "decisionは「次に何をすべきか」の結論です。各項目は商品ページまたは検索結果で確認できる根拠に結びつけ、根拠が弱い場合は「仮説」と明記してください。target, problem, desire, valueProposition, channel, format, testPlan, evidenceを必ず含めてください。",
