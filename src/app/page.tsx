@@ -15,6 +15,9 @@ export default function Home() {
   const [result, setResult] = useState<AcquisitionAnalyzeResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [narrationText, setNarrationText] = useState("");
+  const [narrationAudio, setNarrationAudio] = useState("");
+  const [narrationLoading, setNarrationLoading] = useState(false);
 
   async function analyze(e?: FormEvent) {
     e?.preventDefault(); setLoading(true); setError(""); setResult(null);
@@ -23,6 +26,11 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "分析に失敗しました。");
       setResult(data.data);
+      const d = data.data.analysis.decision;
+      setNarrationText(
+        `${d.target}に向けて、${d.problem}。だからこそ、${d.valueProposition}。まずは${d.channel}で${d.format}を試してみましょう。`
+      );
+      setNarrationAudio("");
     } catch (err) { setError(err instanceof Error ? err.message : "分析に失敗しました。"); }
     finally { setLoading(false); }
   }
@@ -52,6 +60,58 @@ export default function Home() {
       {result.analysis.socialSignals?.length > 0 && <Section title="SNS実データ"><div className="action-list">{result.analysis.socialSignals.map((x, i) => <article key={i}><b>{i + 1}</b><div><a href={x.url} target="_blank" rel="noreferrer"><strong>{x.title}</strong></a><p>@{x.author}</p><small>TikTok · 再生 {x.views ?? "-"} · いいね {x.likes ?? "-"} · コメント {x.comments ?? "-"} · シェア {x.shares ?? "-"}</small></div></article>)}</div></Section>
       {result.analysis.shopSignals?.length > 0 && <Section title="TikTok Shop競合"><div className="action-list">{result.analysis.shopSignals.map((x, i) => <article key={i}><b>{i + 1}</b><div><a href={x.url || "#"} target="_blank" rel="noreferrer"><strong>{x.title}</strong></a><p>{x.seller || "販売者不明"}</p><small>価格 {x.price ?? "-"} {x.currency} · 販売数 {x.sales ?? "-"} · 評価 {x.rating ?? "-"} · レビュー {x.reviewCount ?? "-"}</small></div></article>)}</div></Section>}}
       {result.analysis.searchEvidence?.length > 0 && <Section title="検索エビデンス"><List items={result.analysis.searchEvidence.map(x => x.title + " — " + x.url + " — " + x.snippet)}/></Section>}
+      <section className="next">
+        <p className="eyebrow">VIDEO ENGINE</p>
+        <h2>Gemini TTS ナレーション</h2>
+        <p className="hint">集客判断からナレーション本文を作り、Gemini 3.8 Flash TTSでWAV音声を生成します。</p>
+        <textarea
+          value={narrationText}
+          onChange={(e) => setNarrationText(e.target.value)}
+          rows={5}
+          style={{ width: "100%", marginBottom: 12 }}
+          placeholder="ナレーション本文"
+        />
+        <button
+          type="button"
+          disabled={narrationLoading || !narrationText.trim()}
+          onClick={async () => {
+            setNarrationLoading(true);
+            setError("");
+            try {
+              const res = await fetch("/api/narration", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  text: narrationText,
+                  voice: "Kore",
+                  style: "自然で明るく、信頼感のある日本語広告ナレーション"
+                })
+              });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data.error || "ナレーション生成に失敗しました。");
+              setNarrationAudio(`data:${data.data.mimeType};base64,${data.data.audioBase64}`);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "ナレーション生成に失敗しました。");
+            } finally {
+              setNarrationLoading(false);
+            }
+          }}
+        >
+          {narrationLoading ? "音声生成中..." : "ナレーションを生成"}
+        </button>
+        {narrationAudio && (
+          <div style={{ marginTop: 16 }}>
+            <audio controls src={narrationAudio} style={{ width: "100%" }} />
+            <a
+              href={narrationAudio}
+              download="narration.wav"
+              style={{ display: "inline-block", marginTop: 8 }}
+            >
+              WAVを保存
+            </a>
+          </div>
+        )}
+      </section>
       <p className="ai-note">{result.analysis.aiConnected ? "AI分析: 接続済み" : "AI分析: 未接続（ページ抽出ベース）"}</p>
     </div>}
   </main>;
