@@ -19,11 +19,11 @@ function stripTags(value: string) {
 
 function extractBingResults(html: string, limit: number): WebSearchResult[] {
   const results: WebSearchResult[] = [];
-  for (const match of html.matchAll(/<li[^>]*class=["'][^"']*b_algo[^"']*["'][\\s\\S]*?<h2[^>]*>\\s*<a[^>]+href=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>[\\s\\S]*?(?:<p[^>]*>([\\s\\S]*?)<\\/p>)?[\\s\\S]*?<\\/li>/gi)) {
+  for (const match of html.matchAll(/<li[^>]*class=["'][^"']*b_algo[^"']*["'][\s\S]*?<h2[^>]*>\s*<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>[\s\S]*?(?:<p[^>]*>([\s\S]*?)<\/p>)?[\s\S]*?<\/li>/gi)) {
     const resultUrl = decode(match[1] ?? "");
     const title = stripTags(match[2] ?? "");
     const snippet = stripTags(match[3] ?? "");
-    if (!/^https?:\\/\\//i.test(resultUrl) || !title) continue;
+    if (!/^https?:\/\//i.test(resultUrl) || !title) continue;
     if (results.some((x) => x.url === resultUrl)) continue;
     results.push({ title, url: resultUrl, snippet });
     if (results.length >= limit) break;
@@ -65,7 +65,7 @@ export async function discoverAcquisitionSignals(input: AcquisitionSearchInput):
 }> {
   const signal = (input.productSignals ?? []).find((x) => x.length >= 4) ?? "";
   const base = (signal || input.productName || input.description || "商品")
-    .replace(/\\s+/g, " ")
+    .replace(/\s+/g, " ")
     .trim()
     .slice(0, 120);
 
