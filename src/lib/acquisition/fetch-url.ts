@@ -17,26 +17,42 @@ function matches(html: string, pattern: RegExp) {
     .filter(Boolean);
 }
 
-function extractJsonLdProduct(html: string): string[] {
+function extractJsonLdProduct(html: string): { signals: string[]; productName?: string; brand?: string; category?: string } {
   const signals: string[] = [];
+  let productName: string | undefined;
+  let brand: string | undefined;
+  let category: string | undefined;
+
   for (const match of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
     try {
       const raw = decodeHtml(match[1] ?? "").trim();
       const parsed = JSON.parse(raw);
-      const items = Array.isArray(parsed) ? parsed : [parsed, ...(Array.isArray(parsed?.["@graph"]) ? parsed["@graph"] : [])];
+      const roots = Array.isArray(parsed) ? parsed : [parsed];
+      const items = roots.flatMap((root) => [root, ...(Array.isArray(root?.["@graph"]) ? root["@graph"] : [])]);
+
       for (const item of items) {
         if (!item || typeof item !== "object") continue;
         const type = Array.isArray(item["@type"]) ? item["@type"] : [item["@type"]];
         if (!type.some((x: unknown) => String(x).toLowerCase() === "product")) continue;
-        for (const value of [item.name, item.description, item.brand?.name, item.category]) {
-          if (typeof value === "string" && value.trim()) signals.push(value.trim());
+
+        const name = typeof item.name === "string" ? item.name.trim() : "";
+        const itemBrand = typeof item.brand?.name === "string" ? item.brand.name.trim() : "";
+        const itemCategory = typeof item.category === "string" ? item.category.trim() : "";
+        const description = typeof item.description === "string" ? item.description.trim() : "";
+
+        if (!productName && name) productName = name;
+        if (!brand && itemBrand) brand = itemBrand;
+        if (!category && itemCategory) category = itemCategory;
+
+        for (const value of [name, itemBrand, itemCategory, description]) {
+          if (value && value.length <= 500) signals.push(value);
         }
       }
     } catch {
       // Ignore malformed JSON-LD and continue with ordinary HTML extraction.
     }
   }
-  return [...new Set(signals)];
+  return { signals: [...new Set(signals)], productName, brand, category };
 }
 
 function cleanText(html: string) {
@@ -84,13 +100,19 @@ export async function fetchPageSnapshot(inputUrl: string): Promise<PageSnapshot>
     .map((m) => { try { return new URL(m[1], response.url).toString(); } catch { return ""; } })
     .filter((x) => /^https?:/i.test(x)).slice(0, 50);
   const text = cleanText(html).slice(0, 20_000);
-  const jsonLdSignals = extractJsonLdProduct(html);
+  const jsonLd = extractJsonLdProduct(html);
+  const ogTitle = matches(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([\s\S]*?)["'][^>]*>/i)[0];
+  const ogDescription = matches(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([\s\S]*?)["'][^>]*>/i)[0];
   const productSignals = [
-    ...jsonLdSignals,
-    ...matches(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([\s\S]*?)["'][^>]*>/i),
-    ...matches(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([\s\S]*?)["'][^>]*>/i),
-    ...headings.slice(0, 10)
-  ].filter((value, index, all) => all.indexOf(value) === index).slice(0, 20);
+    jsonLd.productName, jsonLd.brand, jsonLd.category, ...jsonLd.signals,
+    ogTitle, ogDescription, ...headings.slice(0, 10)
+  ].filter((value): value is string => Boolean(value))
+   .filter((value, index, all) => all.indexOf(value) === index).slice(0, 20);
 
-  return { url: response.url, title, description, headings, text, links, productSignals };
+  return {
+    url: response.url, title, description, headings, text, links, productSignals,
+    productName: jsonLd.productName || ogTitle || headings[0] || title || undefined,
+    productBrand: jsonLd.brand,
+    productCategory: jsonLd.category
+  };
 }
