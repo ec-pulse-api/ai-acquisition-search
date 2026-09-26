@@ -1,24 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { analyzeAcquisitionTarget } from "@/lib/acquisition/ai";
-import type { AcquisitionTarget } from "@/lib/acquisition/types";
+import { analyzePage } from "@/lib/acquisition/analyze";
+import { fetchPageSnapshot } from "@/lib/acquisition/fetch-url";
+
+export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
-    const target = (await request.json()) as AcquisitionTarget;
-    if (!target?.id || !target?.name) {
-      return NextResponse.json({ error: "A valid acquisition target is required." }, { status: 400 });
-    }
-
-    const analysis = await analyzeAcquisitionTarget(target);
-    return NextResponse.json({
-      data: analysis,
-      meta: {
-        aiConnected: Boolean(process.env.OPENAI_API_KEY),
-        model: process.env.OPENAI_API_KEY ? process.env.OPENAI_MODEL || "gpt-5-mini" : null,
-      },
-    });
+    const body = await request.json();
+    const url = typeof body?.url === "string" ? body.url.trim() : "";
+    if (!url) return NextResponse.json({ error: "商品・サービスURLを入力してください。" }, { status: 400 });
+    const source = await fetchPageSnapshot(url);
+    const analysis = await analyzePage(source);
+    return NextResponse.json({ data: { source, analysis } });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Analysis failed";
+    const message = error instanceof Error ? error.message : "分析に失敗しました。";
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }
