@@ -36,6 +36,23 @@ function createServer(): McpServer {
       try {
         const source = await fetchPageSnapshot(url);
         const productName = source.productName || source.title;
+        const previousCampaign = campaignId ? await loadCampaign(campaignId) : null;
+        const previousPerformance: any[] = [];
+        if (previousCampaign?.posts?.length) {
+          const { normalizeXPerformance, normalizeYouTubePerformance, normalizeTikTokPerformance, normalizeInstagramPerformance, normalizeFacebookPerformance } = await import("../lib/analytics/performance");
+          const { getXPostMetrics } = await import("../lib/social/x");
+          for (const post of previousCampaign.posts) {
+            try {
+              if (post.platform === "x") previousPerformance.push(await normalizeXPerformance(await getXPostMetrics(post.postId)));
+              else if (post.platform === "youtube") previousPerformance.push(await normalizeYouTubePerformance(await getYouTubeVideoStatus(post.postId)));
+              else if (post.platform === "tiktok") previousPerformance.push(await normalizeTikTokPerformance(await getTikTokVideoMetrics(post.postId)));
+              else if (post.platform === "instagram") previousPerformance.push(await normalizeInstagramPerformance(await getInstagramReelMetrics(post.postId)));
+              else if (post.platform === "facebook") previousPerformance.push(await normalizeFacebookPerformance(await getFacebookReelMetrics(post.postId)));
+            } catch (error) {
+              previousPerformance.push({ platform: post.platform, postId: post.postId, metrics: {}, collectionError: error instanceof Error ? error.message : String(error) });
+            }
+          }
+        }
         const socialSignals = await discoverSocialSignals(productName);
         const shopSignals = await discoverShopSignals(productName);
         const analysis = await analyzePage(source, undefined, socialSignals, shopSignals);
@@ -112,6 +129,7 @@ function createServer(): McpServer {
       description: "商品URLから分析→次広告決定→Higgsfield動画生成→ナレーションまでを1回の広告サイクルとして実行します。SNS投稿は認可とpublishModeを確認してから実行します。",
       inputSchema: z.object({
         url: z.string().url(),
+        campaignId: z.string().optional(),
         publishMode: z.enum(["draft", "approval", "autonomous"]).default("draft"),
         narrationText: z.string().optional(),
         platforms: z.array(z.enum(["tiktok", "youtube", "instagram", "facebook", "x"])).default([]),
@@ -131,7 +149,7 @@ function createServer(): McpServer {
           productCategory: source.productCategory
         });
         const analysis = await analyzePage(source, { query: search.queries.join(" / "), results: search.results }, socialSignals, shopSignals);
-        const decision = decideNextCampaign({ analysis });
+        const decision = decideNextCampaign({ analysis, performance: previousPerformance });
         const selected = decision.nextTests[0];
         const prompt = videoPrompt ?? [selected?.concept, selected?.hook, decision.productionBrief.angle, decision.productionBrief.format, decision.productionBrief.cta].filter(Boolean).join(". ");
         let video: unknown = null;
@@ -194,7 +212,7 @@ function createServer(): McpServer {
           hypothesis: decision, posts, performance: []
         };
         const filePath = await saveCampaign(record);
-        return { content: [{ type: "text", text: JSON.stringify({ campaignId, publishMode, platforms, analysis, decision, video, videoUrl, narration, publishResults, filePath, publishing: publishMode === "autonomous" ? "autonomous publish attempted for configured platforms" : "not published" }, null, 2) }] };
+        return { content: [{ type: "text", text: JSON.stringify({ campaignId, publishMode, platforms, analysis, decision, previousPerformance, video, videoUrl, narration, publishResults, filePath, publishing: publishMode === "autonomous" ? "autonomous publish attempted for configured platforms" : "not published" }, null, 2) }] };
       } catch (error) {
         const message = error instanceof Error ? error.message : "広告サイクルの実行に失敗しました。";
         return { content: [{ type: "text", text: message }], isError: true };
