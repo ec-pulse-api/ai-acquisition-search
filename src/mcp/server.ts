@@ -13,6 +13,9 @@ import { decideNextCampaign } from "../lib/campaign/decision";
 import { getTikTokPublishStatus, publishTikTokVideo, queryTikTokCreator } from "../lib/social/tiktok";
 import { getYouTubeVideoStatus, uploadYouTubeVideo } from "../lib/social/youtube";
 import { publishFacebookReel, publishInstagramReel } from "../lib/social/meta";
+import { publishXPost } from "../lib/social/x";
+import { writeFile, mkdir } from "node:fs/promises";
+import path from "node:path";
 
 function createServer(): McpServer {
   const server = new McpServer({
@@ -148,13 +151,50 @@ function createServer(): McpServer {
         if (narrationText && process.env.GEMINI_API_KEY) {
           narration = await saveNarrationFile({ text: narrationText });
         }
+        const publishResults: unknown[] = [];
+        const posts: Array<{ platform: string; postId: string; url?: string; publishedAt?: string }> = [];
+        const caption = selected?.hook || decision.productionBrief.objective || productName;
+
+        if (publishMode === "autonomous" && videoUrl) {
+          if (platforms.includes("tiktok") && process.env.TIKTOK_ACCESS_TOKEN) {
+            const result = await publishTikTokVideo({ videoUrl, title: caption, isAigc: true });
+            publishResults.push({ platform: "tiktok", ...result });
+            if (result.publishId) posts.push({ platform: "tiktok", postId: result.publishId, publishedAt: new Date().toISOString() });
+          }
+          if (platforms.includes("instagram") && process.env.META_ACCESS_TOKEN && process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID) {
+            const result = await publishInstagramReel({ videoUrl, caption });
+            publishResults.push({ platform: "instagram", ...result });
+            if (result.id) posts.push({ platform: "instagram", postId: result.id, publishedAt: new Date().toISOString() });
+          }
+          if (platforms.includes("facebook") && process.env.META_ACCESS_TOKEN && process.env.FACEBOOK_PAGE_ID) {
+            const result = await publishFacebookReel({ videoUrl, caption });
+            publishResults.push({ platform: "facebook", ...result });
+            if (result.id) posts.push({ platform: "facebook", postId: result.id, publishedAt: new Date().toISOString() });
+          }
+          if (platforms.includes("x") && process.env.X_ACCESS_TOKEN) {
+            const result = await publishXPost({ text: caption });
+            publishResults.push({ platform: "x", ...result });
+            if (result.postId) posts.push({ platform: "x", postId: result.postId, url: result.url, publishedAt: new Date().toISOString() });
+          }
+          if (platforms.includes("youtube") && process.env.YOUTUBE_ACCESS_TOKEN) {
+            const outputPath = path.join(process.cwd(), "generated", "campaign-video.mp4");
+            await mkdir(path.dirname(outputPath), { recursive: true });
+            const response = await fetch(videoUrl);
+            if (!response.ok) throw new Error(`動画ファイル取得に失敗しました（HTTP ${response.status}）。`);
+            await writeFile(outputPath, Buffer.from(await response.arrayBuffer()));
+            const result = await uploadYouTubeVideo({ filePath: outputPath, title: caption, description: decision.productionBrief.objective });
+            publishResults.push({ platform: "youtube", ...result });
+            if (result.videoId) posts.push({ platform: "youtube", postId: result.videoId, url: result.url, publishedAt: new Date().toISOString() });
+          }
+        }
+
         const campaignId = createCampaignId();
         const record = {
-          campaignId, productUrl: url, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), status: "planning" as const,
-          hypothesis: decision, posts: [], performance: []
+          campaignId, productUrl: url, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), status: posts.length ? "testing" as const : "planning" as const,
+          hypothesis: decision, posts, performance: []
         };
         const filePath = await saveCampaign(record);
-        return { content: [{ type: "text", text: JSON.stringify({ campaignId, publishMode, platforms, analysis, decision, video, videoUrl, narration, filePath, publishing: publishMode === "draft" ? "draft-only" : "platform publishing requires the corresponding authorized publish tool and confirmed asset URL" }, null, 2) }] };
+        return { content: [{ type: "text", text: JSON.stringify({ campaignId, publishMode, platforms, analysis, decision, video, videoUrl, narration, publishResults, filePath, publishing: publishMode === "autonomous" ? "autonomous publish attempted for configured platforms" : "not published" }, null, 2) }] };
       } catch (error) {
         const message = error instanceof Error ? error.message : "広告サイクルの実行に失敗しました。";
         return { content: [{ type: "text", text: message }], isError: true };
