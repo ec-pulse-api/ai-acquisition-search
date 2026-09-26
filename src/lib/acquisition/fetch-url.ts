@@ -17,6 +17,28 @@ function matches(html: string, pattern: RegExp) {
     .filter(Boolean);
 }
 
+function extractJsonLdProduct(html: string): string[] {
+  const signals: string[] = [];
+  for (const match of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    try {
+      const raw = decodeHtml(match[1] ?? "").trim();
+      const parsed = JSON.parse(raw);
+      const items = Array.isArray(parsed) ? parsed : [parsed, ...(Array.isArray(parsed?.["@graph"]) ? parsed["@graph"] : [])];
+      for (const item of items) {
+        if (!item || typeof item !== "object") continue;
+        const type = Array.isArray(item["@type"]) ? item["@type"] : [item["@type"]];
+        if (!type.some((x: unknown) => String(x).toLowerCase() === "product")) continue;
+        for (const value of [item.name, item.description, item.brand?.name, item.category]) {
+          if (typeof value === "string" && value.trim()) signals.push(value.trim());
+        }
+      }
+    } catch {
+      // Ignore malformed JSON-LD and continue with ordinary HTML extraction.
+    }
+  }
+  return [...new Set(signals)];
+}
+
 function cleanText(html: string) {
   return decodeHtml(html.replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
@@ -62,11 +84,13 @@ export async function fetchPageSnapshot(inputUrl: string): Promise<PageSnapshot>
     .map((m) => { try { return new URL(m[1], response.url).toString(); } catch { return ""; } })
     .filter((x) => /^https?:/i.test(x)).slice(0, 50);
   const text = cleanText(html).slice(0, 20_000);
+  const jsonLdSignals = extractJsonLdProduct(html);
   const productSignals = [
+    ...jsonLdSignals,
     ...matches(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([\s\S]*?)["'][^>]*>/i),
     ...matches(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([\s\S]*?)["'][^>]*>/i),
     ...headings.slice(0, 10)
-  ].slice(0, 20);
+  ].filter((value, index, all) => all.indexOf(value) === index).slice(0, 20);
 
   return { url: response.url, title, description, headings, text, links, productSignals };
 }
