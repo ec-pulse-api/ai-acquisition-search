@@ -1,11 +1,62 @@
-import Link from "next/link";
-import { notFound } from "next/navigation";
-import { acquisitionTargets } from "@/lib/acquisition/data";
+"use client";
 
-export default async function TargetPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const target = acquisitionTargets.find((item) => item.id === id);
-  if (!target) notFound();
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { acquisitionTargets } from "@/lib/acquisition/data";
+import type { AcquisitionTarget } from "@/lib/acquisition/types";
+import type { AIAnalysis } from "@/lib/acquisition/ai";
+
+export default function TargetPage({ params }: { params: Promise<{ id: string }> }) {
+  const [target, setTarget] = useState<AcquisitionTarget | null>(null);
+  const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
+  const [status, setStatus] = useState("Loading...");
+  const [analyzing, setAnalyzing] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      const { id } = await params;
+      const local = acquisitionTargets.find((item) => item.id === id);
+      if (local) {
+        setTarget(local);
+        setStatus("Sample target");
+        return;
+      }
+
+      setStatus("Loading live listing...");
+      const response = await fetch(`/api/sources/empire-flippers?limit=100`);
+      const payload = await response.json();
+      const found = payload.data?.find((item: AcquisitionTarget) => item.id === id);
+      if (found) {
+        setTarget(found);
+        setStatus("Live marketplace listing");
+      } else {
+        setStatus("Target not found");
+      }
+    })();
+  }, [params]);
+
+  async function runAnalysis() {
+    if (!target) return;
+    setAnalyzing(true);
+    setStatus("AI analysis running...");
+    try {
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(target),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Analysis failed");
+      setAnalysis(payload.data);
+      setStatus(payload.meta?.aiConnected ? `AI analysis · ${payload.meta.model}` : "AI provider not connected");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Analysis failed");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  if (!target) return <main className="min-h-screen bg-[#07090d] p-10 text-white"><p className="text-white/50">{status}</p></main>;
 
   return (
     <main className="min-h-screen bg-[#07090d] text-white">
@@ -17,52 +68,47 @@ export default async function TargetPage({ params }: { params: Promise<{ id: str
               <p className="text-xs uppercase tracking-[0.2em] text-white/35">{target.category} · {target.model}</p>
               <h1 className="mt-3 text-4xl font-semibold tracking-[-0.03em] sm:text-5xl">{target.name}</h1>
               <p className="mt-4 max-w-2xl leading-7 text-white/50">{target.summary}</p>
+              <p className="mt-3 text-xs text-white/30">{status}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 text-center">
               <div className="text-3xl font-semibold">{target.score}</div>
-              <div className="mt-1 text-[11px] uppercase tracking-wider text-white/35">Signal score</div>
+              <div className="mt-1 text-[11px] uppercase tracking-wider text-white/35">Screen score</div>
             </div>
           </div>
         </header>
 
-        <div className="grid gap-5 py-8 md:grid-cols-2">
-          <section className="rounded-3xl border border-white/10 bg-white/[0.035] p-6">
-            <p className="text-xs uppercase tracking-wider text-white/35">Acquisition thesis</p>
-            <p className="mt-4 leading-7 text-white/60">{target.description}</p>
-            <ul className="mt-5 space-y-3">
-              {target.acquisitionRationale.map((item) => (
-                <li key={item} className="text-sm leading-6 text-white/55">• {item}</li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="rounded-3xl border border-white/10 bg-white/[0.035] p-6">
-            <p className="text-xs uppercase tracking-wider text-white/35">AI opportunity</p>
-            <p className="mt-4 leading-7 text-white/60">{target.aiOpportunity}</p>
-            <div className="mt-6">
-              <p className="text-xs text-white/35">Revenue profile</p>
-              <p className="mt-1 text-sm text-white/60">{target.revenueProfile}</p>
-            </div>
-            <div className="mt-5">
-              <p className="text-xs text-white/35">Growth profile</p>
-              <p className="mt-1 text-sm text-white/60">{target.growthProfile}</p>
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-white/10 bg-white/[0.035] p-6 md:col-span-2">
-            <p className="text-xs uppercase tracking-wider text-white/35">Risks to validate</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {target.risks.map((risk) => (
-                <div key={risk} className="rounded-2xl border border-white/10 bg-black/10 p-4 text-sm text-white/55">{risk}</div>
-              ))}
-            </div>
-          </section>
+        <div className="py-8">
+          <button onClick={() => void runAnalysis()} disabled={analyzing}
+            className="rounded-2xl bg-white px-6 py-3 text-sm font-semibold text-black disabled:opacity-50">
+            {analyzing ? "Analyzing..." : "Run AI acquisition analysis"}
+          </button>
         </div>
 
-        <p className="border-t border-white/10 pt-5 text-xs text-white/25">
-          Data status: {target.sourceType}. This page is an analysis interface, not a verified acquisition listing.
-        </p>
+        {analysis && (
+          <div className="grid gap-5 pb-10 md:grid-cols-2">
+            <section className="rounded-3xl border border-white/10 bg-white/[0.035] p-6 md:col-span-2">
+              <p className="text-xs uppercase tracking-wider text-white/35">Acquisition thesis</p>
+              <p className="mt-4 leading-7 text-white/65">{analysis.thesis}</p>
+              <p className="mt-5 text-sm text-white/50">{analysis.acquisitionFit}</p>
+            </section>
+            <Info title="Strengths" items={analysis.strengths} />
+            <Info title="AI opportunities" items={analysis.aiOpportunities} />
+            <Info title="Risks" items={analysis.risks} />
+            <Info title="Due diligence questions" items={analysis.diligenceQuestions} />
+          </div>
+        )}
       </div>
     </main>
+  );
+}
+
+function Info({ title, items }: { title: string; items: string[] }) {
+  return (
+    <section className="rounded-3xl border border-white/10 bg-white/[0.035] p-6">
+      <p className="text-xs uppercase tracking-wider text-white/35">{title}</p>
+      <ul className="mt-4 space-y-3">
+        {items.map((item) => <li key={item} className="text-sm leading-6 text-white/55">• {item}</li>)}
+      </ul>
+    </section>
   );
 }
