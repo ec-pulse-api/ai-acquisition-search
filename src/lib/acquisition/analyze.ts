@@ -3,10 +3,10 @@ import { buildAcquisitionPrompt } from "./prompts";
 import type { WebSearchResult } from "./search-web";
 
 function fallback(source: PageSnapshot, webResults: { query: string; results: WebSearchResult[] } = { query: "", results: [] }): AcquisitionAnalysis {
-  const evidence=[source.title,source.description,...source.headings].filter(Boolean).slice(0,8);
+  const evidence=[source.productName,source.title,source.description,...source.headings].filter(Boolean).slice(0,8) as string[];
   const words=source.text.match(/(?:法人|企業|個人|初心者|担当者|経営者|マーケティング|開発者|店舗|EC|クリエイター)/gi)??[];
   const segment=[...new Set(words)].slice(0,3);
-  const productName=source.title||"この商品";
+  const productName=source.productName||source.title||"この商品";
   return {
     product:{summary:source.title?source.title+" の公開ページから商品・サービス情報を抽出しました。":"商品・サービス名を十分に特定できませんでした。",valueProposition:source.headings.slice(0,5),evidence},
     market:{summary:"市場規模・成長率などの外部データは未取得です。",signals:source.headings.slice(0,6)},
@@ -20,7 +20,8 @@ function fallback(source: PageSnapshot, webResults: { query: string; results: We
       {priority:2,action:"異なる訴求の投稿を3本テストする",reason:"反応する訴求が未検証のため",channel:"SNS"},
       {priority:3,action:"アクセス・CV・売上を記録して次の判断材料にする",reason:"実績ベースの最適化に必要なため",channel:"Analytics / EC"}
     ],
-    nextActions:["顧客・競合・訴求候補を検索する","異なる訴求の投稿を3本テストする","アクセス・CV・売上を記録する"],\n    decision:{target:segment.length?segment.join(" / "):"公開ページから顧客像を特定できていない",problem:"顧客の具体的な悩みを外部情報で追加検証する",desire:"商品ページで示されている便益を実際の顧客表現で検証する",valueProposition:source.headings.slice(0,3).join(" / ")||"商品ページの主要便益を検証する",channel:"TikTok / Instagram Reels",format:"悩み起点の短尺投稿",testPlan:"異なる訴求を3本出し、視聴維持率・クリック率・購入率を比較する",evidence:evidence.slice(0,5)]
+    nextActions:["顧客・競合・訴求候補を検索する","異なる訴求の投稿を3本テストする","アクセス・CV・売上を記録する"],
+    decision:{target:segment.length?segment.join(" / "):"公開ページから顧客像を特定できていない",problem:"顧客の具体的な悩みを外部情報で追加検証する",desire:"商品ページで示されている便益を実際の顧客表現で検証する",valueProposition:source.headings.slice(0,3).join(" / ")||"商品ページの主要便益を検証する",channel:"TikTok / Instagram Reels",format:"悩み起点の短尺投稿",testPlan:"異なる訴求を3本出し、視聴維持率・クリック率・購入率を比較する",evidence:evidence.slice(0,5)]
     nextPosts:[
       {rank:1,concept:productName+"の悩み解決型",hook:"この商品が必要になる人は、まずここを見てください。",format:"15〜30秒短尺",channel:"TikTok / Instagram Reels",reason:"悩み起点の反応を検証するため",testMetric:"視聴維持率・クリック率"},
       {rank:2,concept:productName+"の比較型",hook:"似た商品を買う前に、この3つを比較してください。",format:"比較型短尺",channel:"TikTok / Instagram Reels",reason:"比較検討層の反応を検証するため",testMetric:"保存率・クリック率"},
