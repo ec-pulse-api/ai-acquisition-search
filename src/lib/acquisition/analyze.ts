@@ -1,8 +1,8 @@
 import type { AcquisitionAnalysis, PageSnapshot } from "./types";
 import { buildAcquisitionPrompt } from "./prompts";
-import type { WebSearchResult } from "./search-web";
+import type { WebSearchResult } from "./search-web";\nimport type { SocialSignal } from "./social-search";
 
-function fallback(source: PageSnapshot, webResults: { query: string; results: WebSearchResult[] } = { query: "", results: [] }): AcquisitionAnalysis {
+function fallback(source: PageSnapshot, webResults: { query: string; results: WebSearchResult[] } = { query: "", results: [] }, socialSignals: SocialSignal[] = []): AcquisitionAnalysis {
   const evidence=[source.productName,source.title,source.description,...source.headings].filter(Boolean).slice(0,8) as string[];
   const words=source.text.match(/(?:法人|企業|個人|初心者|担当者|経営者|マーケティング|開発者|店舗|EC|クリエイター)/gi)??[];
   const segment=[...new Set(words)].slice(0,3);
@@ -27,20 +27,20 @@ function fallback(source: PageSnapshot, webResults: { query: string; results: We
       {rank:2,concept:productName+"の比較型",hook:"似た商品を買う前に、この3つを比較してください。",format:"比較型短尺",channel:"TikTok / Instagram Reels",reason:"比較検討層の反応を検証するため",testMetric:"保存率・クリック率"},
       {rank:3,concept:productName+"の使用シーン型",hook:"実際に使うなら、この場面で違いが出ます。",format:"使用シーン紹介",channel:"TikTok / Instagram Reels",reason:"利用イメージの反応を検証するため",testMetric:"クリック率・購入率"}
     ],
-    searchEvidence:webResults.results.slice(0,10),aiConnected:false
+    socialSignals,\n    searchEvidence:webResults.results.slice(0,10),aiConnected:false
   };
 }
 
-export async function analyzePage(source:PageSnapshot,webResults:{query:string;results:WebSearchResult[]}={query:"",results:[]}):Promise<AcquisitionAnalysis>{
+export async function analyzePage(source:PageSnapshot,webResults:{query:string;results:WebSearchResult[]}={query:"",results:[]},socialSignals: SocialSignal[] = []):Promise<AcquisitionAnalysis>{
   const apiKey=process.env.OPENAI_API_KEY;
-  if(!apiKey)return fallback(source, webResults);
+  if(!apiKey)return fallback(source, webResults, socialSignals);
   const response=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+apiKey},body:JSON.stringify({
     model:process.env.OPENAI_MODEL||"gpt-5-mini",temperature:0.2,response_format:{type:"json_object"},
-    messages:[{role:"system",content:"あなたはB2C/B2Bの顧客獲得戦略を分析する慎重なマーケティングアナリストです。"},{role:"user",content:buildAcquisitionPrompt(source,webResults)}]
+    messages:[{role:"system",content:"あなたはB2C/B2Bの顧客獲得戦略を分析する慎重なマーケティングアナリストです。"},{role:"user",content:buildAcquisitionPrompt(source,webResults,socialSignals)}]
   })});
   if(!response.ok)throw new Error("AI分析に失敗しました（HTTP "+response.status+"）。");
   const payload=await response.json(); const content=payload.choices?.[0]?.message?.content;
   if(!content)throw new Error("AIから分析結果が返りませんでした。");
   const parsed=JSON.parse(content) as Partial<AcquisitionAnalysis>;
-  return { ...fallback(source, webResults), ...parsed, searchEvidence: parsed.searchEvidence?.length ? parsed.searchEvidence : webResults.results.slice(0,10), decision: parsed.decision ?? fallback(source, webResults).decision, aiConnected:true };
+  return { ...fallback(source, webResults, socialSignals), ...parsed, searchEvidence: parsed.searchEvidence?.length ? parsed.searchEvidence : webResults.results.slice(0,10), decision: parsed.decision ?? fallback(source, webResults).decision, aiConnected:true };
 }
