@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzePage } from "@/lib/acquisition/analyze";
 import { fetchPageSnapshot } from "@/lib/acquisition/fetch-url";
-import { discoverAcquisitionSignals } from "@/lib/acquisition/search-web";\nimport { discoverSocialSignals } from "@/lib/acquisition/social-search";
+import { discoverAcquisitionSignals } from "@/lib/acquisition/search-web";\nimport { discoverSocialSignals } from "@/lib/acquisition/social-search";\nimport { discoverShopSignals } from "@/lib/acquisition/shop-search";
 
 export const runtime="nodejs";
 
@@ -12,7 +12,7 @@ export async function POST(request:NextRequest){
     if(!url)return NextResponse.json({error:"商品・サービスURLを入力してください。"},{status:400});
     const source=await fetchPageSnapshot(url);
     const search=await discoverAcquisitionSignals({productName:source.productName||source.title,description:source.description,productSignals:source.productSignals,productCategory:source.productCategory});
-    const socialSignals=await discoverSocialSignals(source.productName||source.title);\n    const analysis=await analyzePage(source,{query:search.queries.join(" / "),results:search.results},socialSignals);
+    const productName=source.productName||source.title;\n    const socialSignals=await discoverSocialSignals(productName);\n    const shopSignals=await discoverShopSignals(productName);\n    const analysis=await analyzePage(source,{query:search.queries.join(" / "),results:search.results},socialSignals,shopSignals);
     return NextResponse.json({data:{source,analysis}});
   }catch(error){
     const message=error instanceof Error?error.message:"分析に失敗しました。";
