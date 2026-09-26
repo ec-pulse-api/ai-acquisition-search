@@ -1,4 +1,4 @@
-export type AcquisitionAnalysis = {
+export type AcquisitionDecision = { target: string; problem: string; desire: string; valueProposition: string; channel: string; format: string; testPlan: string; evidence: string[] };\n\nexport type AcquisitionAnalysis = {
   product: { summary: string; valueProposition: string[]; evidence: string[] };
   market: { summary: string; signals: string[] };
   customer: { summary: string; likelySegments: string[]; needs: string[] };
