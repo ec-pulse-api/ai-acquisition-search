@@ -130,7 +130,8 @@ function createServer(): McpServer {
         disableDuet: z.boolean().optional(),
         disableStitch: z.boolean().optional(),
         isAigc: z.boolean().optional(),
-        brandOrganicToggle: z.boolean().optional()
+        brandOrganicToggle: z.boolean().optional(),
+        videoCoverTimestampMs: z.number().int().min(0).optional()
       })
     },
     async (input) => {
