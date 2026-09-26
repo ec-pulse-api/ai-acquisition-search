@@ -8,6 +8,15 @@ export type AcquisitionAnalysis = {
   opportunities: string[];
   priorities: { priority: number; action: string; reason: string; channel: string }[];
   nextActions: string[];
+  nextPosts: {
+    rank: number;
+    concept: string;
+    hook: string;
+    format: string;
+    channel: string;
+    reason: string;
+    testMetric: string;
+  }[];
   aiConnected: boolean;
 };
 
