@@ -5,6 +5,7 @@ import { analyzePage } from "../lib/acquisition/analyze";
 import { fetchPageSnapshot } from "../lib/acquisition/fetch-url";
 import { saveNarrationFile } from "../lib/video/gemini-tts";
 import { getTikTokPublishStatus, publishTikTokVideo, queryTikTokCreator } from "../lib/social/tiktok";
+import { getYouTubeVideoStatus, uploadYouTubeVideo } from "../lib/social/youtube";
 
 function createServer(): McpServer {
   const server = new McpServer({
@@ -163,6 +164,53 @@ function createServer(): McpServer {
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : "TikTok投稿状態の取得に失敗しました。";
+        return { content: [{ type: "text", text: message }], isError: true };
+      }
+    }
+  );
+
+  server.registerTool(
+    "youtube-publish",
+    {
+      description:
+        "YouTube Data API v3のvideos.insertを使い、ローカルMP4を認可済みYouTubeチャンネルへアップロードします。",
+      inputSchema: z.object({
+        filePath: z.string().min(1).describe("アップロードするMP4ファイルのローカルパス"),
+        title: z.string().min(1).max(100),
+        description: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+        categoryId: z.string().optional(),
+        privacyStatus: z.enum(["private", "unlisted", "public"]).optional(),
+        madeForKids: z.boolean().optional(),
+        containsSyntheticMedia: z.boolean().optional()
+      })
+    },
+    async (input) => {
+      try {
+        const result = await uploadYouTubeVideo(input);
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "YouTube投稿に失敗しました。";
+        return { content: [{ type: "text", text: message }], isError: true };
+      }
+    }
+  );
+
+  server.registerTool(
+    "youtube-publish-status",
+    {
+      description:
+        "YouTube動画の公開状態、処理状態、再生数・いいね等の公開統計を取得します。",
+      inputSchema: z.object({
+        videoId: z.string().min(1)
+      })
+    },
+    async ({ videoId }) => {
+      try {
+        const result = await getYouTubeVideoStatus(videoId);
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "YouTube状態取得に失敗しました。";
         return { content: [{ type: "text", text: message }], isError: true };
       }
     }
