@@ -49,6 +49,7 @@ export default function Home() {
       <Section title="集客課題"><List items={result.analysis.acquisitionProblems}/></Section>
       <Section title="集客機会"><List items={result.analysis.opportunities}/></Section>
       <Section title="すぐやること"><List items={result.analysis.nextActions}/></Section>
+      {result.analysis.searchEvidence?.length > 0 && <Section title="検索エビデンス"><List items={result.analysis.searchEvidence.map(x => x.title + " — " + x.url + " — " + x.snippet)}/></Section>}
       <p className="ai-note">{result.analysis.aiConnected ? "AI分析: 接続済み" : "AI分析: 未接続（ページ抽出ベース）"}</p>
     </div>}
   </main>;
