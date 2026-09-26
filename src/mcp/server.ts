@@ -291,6 +291,30 @@ function createServer(): McpServer {
     }
   );
 
+
+  server.registerTool(
+    "collect-performance",
+    {
+      description: "公開SNS投稿の実績を共通形式に正規化します。XとYouTubeから取得できます。",
+      inputSchema: z.object({
+        platform: z.enum(["x", "youtube"]),
+        postId: z.string().min(1)
+      })
+    },
+    async ({ platform, postId }) => {
+      try {
+        const { normalizeXPerformance, normalizeYouTubePerformance } = await import("../lib/analytics/performance");
+        const result = platform === "x"
+          ? await normalizeXPerformance(await getXPostMetrics(postId))
+          : await normalizeYouTubePerformance(await getYouTubeVideoStatus(postId));
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "実績取得に失敗しました。";
+        return { content: [{ type: "text", text: message }], isError: true };
+      }
+    }
+  );
+
   return server;
 }
 
