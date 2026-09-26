@@ -120,3 +120,18 @@ export async function publishFacebookReel(input: InstagramReelInput) {
     published: finish.success === true,
   };
 }
+
+
+export async function getInstagramReelMetrics(mediaId: string) {
+  const token = getToken();
+  return graph(
+    `/${encodeURIComponent(mediaId)}?fields=id,permalink,like_count,comments_count,timestamp&access_token=${encodeURIComponent(token)}`,
+  );
+}
+
+export async function getFacebookReelMetrics(videoId: string) {
+  const token = getToken();
+  return graph(
+    `/${encodeURIComponent(videoId)}?fields=id,permalink_url,views,likes.summary(true),comments.summary(true),shares&access_token=${encodeURIComponent(token)}`,
+  );
+}
