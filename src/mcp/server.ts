@@ -315,6 +315,40 @@ function createServer(): McpServer {
     }
   );
 
+  server.registerTool(
+    "optimize-next-campaign",
+    {
+      description: "分析結果と接続済みSNS実績から、次に実施する集客テストと制作ブリーフを決定します。未取得データは推測で補完しません。",
+      inputSchema: z.object({
+        analysis: z.record(z.string(), z.unknown()),
+        performance: z.array(z.object({
+          platform: z.string(),
+          postId: z.string(),
+          metrics: z.object({
+            views: z.number().nullable().optional(),
+            impressions: z.number().nullable().optional(),
+            likes: z.number().nullable().optional(),
+            comments: z.number().nullable().optional(),
+            shares: z.number().nullable().optional(),
+            clicks: z.number().nullable().optional()
+          })
+        })).optional()
+      })
+    },
+    async ({ analysis, performance }) => {
+      try {
+        const result = decideNextCampaign({
+          analysis: analysis as Parameters<typeof decideNextCampaign>[0]["analysis"],
+          performance
+        });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "次の集客施策の決定に失敗しました。";
+        return { content: [{ type: "text", text: message }], isError: true };
+      }
+    }
+  );
+
   return server;
 }
 
