@@ -1,24 +1,27 @@
-export type AcquisitionTarget = {
-  id: string;
-  name: string;
-  category: string;
-  model: string;
-  summary: string;
-  description: string;
-  signals: string[];
-  stage: string;
-  score: number;
-  revenueProfile: string;
-  growthProfile: string;
-  aiOpportunity: string;
-  acquisitionRationale: string[];
-  risks: string[];
-  sourceType: "sample";
+export type AcquisitionAnalysis = {
+  product: { summary: string; valueProposition: string[]; evidence: string[] };
+  market: { summary: string; signals: string[] };
+  customer: { summary: string; likelySegments: string[]; needs: string[] };
+  competitors: { summary: string; signals: string[] };
+  performance: { summary: string; availableEvidence: string[]; missingData: string[] };
+  acquisitionProblems: string[];
+  opportunities: string[];
+  priorities: { priority: number; action: string; reason: string; channel: string }[];
+  nextActions: string[];
+  aiConnected: boolean;
 };
 
-export type SearchFilters = {
-  query?: string;
-  category?: string;
-  model?: string;
-  minScore?: number;
+export type PageSnapshot = {
+  url: string;
+  title: string;
+  description: string;
+  headings: string[];
+  text: string;
+  links: string[];
+  productSignals: string[];
+};
+
+export type AcquisitionAnalyzeResult = {
+  source: PageSnapshot;
+  analysis: AcquisitionAnalysis;
 };
