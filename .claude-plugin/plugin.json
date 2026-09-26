@@ -1,0 +1,13 @@
+{
+  "name": "ai-acquisition-search",
+  "version": "0.2.0",
+  "description": "商品・サービスURLから商品、市場、顧客、競合、実績を分析し、次に取るべき集客アクションを提示するClaude Code拡張機能。",
+  "author": {
+    "name": "shunai394-hash",
+    "url": "https://github.com/shunai394-hash"
+  },
+  "repository": "https://github.com/shunai394-hash/ai-acquisition-search",
+  "license": "MIT",
+  "keywords": ["customer-acquisition", "marketing", "seo", "mcp", "claude-code"],
+  "mcpServers": "./.mcp.json"
+}
