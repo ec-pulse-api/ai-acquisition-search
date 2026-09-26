@@ -4,6 +4,7 @@ import * as z from "zod/v4";
 import { analyzePage } from "../lib/acquisition/analyze";
 import { fetchPageSnapshot } from "../lib/acquisition/fetch-url";
 import { saveNarrationFile } from "../lib/video/gemini-tts";
+import { generateHiggsfieldVideo } from "../lib/video/higgsfield";
 import { getTikTokPublishStatus, publishTikTokVideo, queryTikTokCreator } from "../lib/social/tiktok";
 import { getYouTubeVideoStatus, uploadYouTubeVideo } from "../lib/social/youtube";
 import { publishFacebookReel, publishInstagramReel } from "../lib/social/meta";
@@ -90,6 +91,30 @@ function createServer(): McpServer {
           content: [{ type: "text", text: message }],
           isError: true
         };
+      }
+    }
+  );
+
+  server.registerTool(
+    "higgsfield-create-video",
+    {
+      description: "Higgsfield APIで広告動画を生成します。AI集客エンジンの制作ブリーフを動画プロンプトとして渡し、生成結果を返します。",
+      inputSchema: z.object({
+        prompt: z.string().min(1),
+        model: z.string().optional(),
+        duration: z.number().int().min(2).max(30).optional(),
+        resolution: z.enum(["480p", "720p", "1080p"]).optional(),
+        aspectRatio: z.enum(["16:9", "4:3", "1:1", "3:4", "9:16", "adaptive"]).optional(),
+        generateAudio: z.boolean().optional()
+      })
+    },
+    async (input) => {
+      try {
+        const result = await generateHiggsfieldVideo(input);
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Higgsfield動画生成に失敗しました。";
+        return { content: [{ type: "text", text: message }], isError: true };
       }
     }
   );
