@@ -6,6 +6,7 @@ import { fetchPageSnapshot } from "../lib/acquisition/fetch-url";
 import { saveNarrationFile } from "../lib/video/gemini-tts";
 import { getTikTokPublishStatus, publishTikTokVideo, queryTikTokCreator } from "../lib/social/tiktok";
 import { getYouTubeVideoStatus, uploadYouTubeVideo } from "../lib/social/youtube";
+import { publishFacebookReel, publishInstagramReel } from "../lib/social/meta";
 
 function createServer(): McpServer {
   const server = new McpServer({
@@ -211,6 +212,46 @@ function createServer(): McpServer {
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (error) {
         const message = error instanceof Error ? error.message : "YouTube状態取得に失敗しました。";
+        return { content: [{ type: "text", text: message }], isError: true };
+      }
+    }
+  );
+
+  server.registerTool(
+    "instagram-reel-publish",
+    {
+      description: "Meta Graph APIでInstagramプロフェッショナルアカウントへReelsを公開します。",
+      inputSchema: z.object({
+        videoUrl: z.string().url(),
+        caption: z.string().optional()
+      })
+    },
+    async (input) => {
+      try {
+        const result = await publishInstagramReel(input);
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Instagram投稿に失敗しました。";
+        return { content: [{ type: "text", text: message }], isError: true };
+      }
+    }
+  );
+
+  server.registerTool(
+    "facebook-reel-publish",
+    {
+      description: "Meta Graph APIでFacebook PageへReelsを公開します。",
+      inputSchema: z.object({
+        videoUrl: z.string().url(),
+        caption: z.string().optional()
+      })
+    },
+    async (input) => {
+      try {
+        const result = await publishFacebookReel(input);
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Facebook投稿に失敗しました。";
         return { content: [{ type: "text", text: message }], isError: true };
       }
     }
