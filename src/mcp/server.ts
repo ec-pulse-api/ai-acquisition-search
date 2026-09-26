@@ -10,7 +10,7 @@ import { generateHiggsfieldVideo, getHiggsfieldStatus, waitForHiggsfieldVideo } 
 import { createCampaignId, loadCampaign, saveCampaign } from "../lib/campaign/store";
 import { discoverAcquisitionSignals } from "../lib/acquisition/search-web";
 import { decideNextCampaign } from "../lib/campaign/decision";
-import { getTikTokPublishStatus, getTikTokVideoMetrics, publishTikTokVideo, queryTikTokCreator } from "../lib/social/tiktok";
+import { getTikTokPublishStatus, getTikTokVideoMetrics, publishTikTokVideo, queryTikTokCreator, resolveTikTokVideoId } from "../lib/social/tiktok";
 import { getYouTubeVideoStatus, uploadYouTubeVideo } from "../lib/social/youtube";
 import { getFacebookReelMetrics, getInstagramReelMetrics, publishFacebookReel, publishInstagramReel } from "../lib/social/meta";
 import { publishXPost } from "../lib/social/x";
@@ -36,7 +36,7 @@ function createServer(): McpServer {
       try {
         const source = await fetchPageSnapshot(url);
         const productName = source.productName || source.title;
-        const previousCampaign = null;
+        const previousCampaign = campaignId ? await loadCampaign(campaignId) : null;
         const previousPerformance: any[] = [];
         if (previousCampaign?.posts?.length) {
           const { normalizeXPerformance, normalizeYouTubePerformance, normalizeTikTokPerformance, normalizeInstagramPerformance, normalizeFacebookPerformance } = await import("../lib/analytics/performance");
@@ -51,21 +51,6 @@ function createServer(): McpServer {
             } catch (error) {
               previousPerformance.push({ platform: post.platform, postId: post.postId, metrics: {}, collectionError: error instanceof Error ? error.message : String(error) });
             }
-          }
-        }
-        const previousCampaign = campaignId ? await loadCampaign(campaignId) : null;
-        const previousPerformance: any[] = [];
-        if (previousCampaign?.posts?.length) {
-          const { normalizeXPerformance, normalizeYouTubePerformance, normalizeTikTokPerformance, normalizeInstagramPerformance, normalizeFacebookPerformance } = await import("../lib/analytics/performance");
-          const { getXPostMetrics } = await import("../lib/social/x");
-          for (const post of previousCampaign.posts) {
-            try {
-              if (post.platform === "x") previousPerformance.push(await normalizeXPerformance(await getXPostMetrics(post.postId)));
-              else if (post.platform === "youtube") previousPerformance.push(await normalizeYouTubePerformance(await getYouTubeVideoStatus(post.postId)));
-              else if (post.platform === "tiktok") previousPerformance.push(await normalizeTikTokPerformance(await getTikTokVideoMetrics(post.postId)));
-              else if (post.platform === "instagram") previousPerformance.push(await normalizeInstagramPerformance(await getInstagramReelMetrics(post.postId)));
-              else if (post.platform === "facebook") previousPerformance.push(await normalizeFacebookPerformance(await getFacebookReelMetrics(post.postId)));
-            } catch (error) { previousPerformance.push({ platform: post.platform, postId: post.postId, metrics: {}, collectionError: error instanceof Error ? error.message : String(error) }); }
           }
         }
         const socialSignals = await discoverSocialSignals(productName);
@@ -192,7 +177,7 @@ function createServer(): McpServer {
           if (platforms.includes("tiktok") && process.env.TIKTOK_ACCESS_TOKEN) {
             const result = await publishTikTokVideo({ videoUrl, title: caption, isAigc: true });
             publishResults.push({ platform: "tiktok", ...result });
-            if (result.publishId) posts.push({ platform: "tiktok", postId: result.publishId, publishedAt: new Date().toISOString() });
+            if (result.publishId) { const resolved = await resolveTikTokVideoId(result.publishId); posts.push({ platform: "tiktok", postId: resolved.videoId, publishedAt: new Date().toISOString() }); publishResults.push({ platform: "tiktok-status", ...resolved }); }
           }
           if (platforms.includes("instagram") && process.env.META_ACCESS_TOKEN && process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID) {
             const result = await publishInstagramReel({ videoUrl, caption });
