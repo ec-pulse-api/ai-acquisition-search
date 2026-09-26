@@ -1,7 +1,11 @@
+export type SearchEvidenceCategory = "customer_pain" | "customer_desire" | "competitor" | "market" | "channel";
+
 export type WebSearchResult = {
   title: string;
   url: string;
   snippet: string;
+  category: SearchEvidenceCategory;
+  query: string;
 };
 
 function decode(value: string) {
