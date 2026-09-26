@@ -21,7 +21,7 @@ function stripTags(value: string) {
   return decode(value.replace(/<[^>]+>/g, " "));
 }
 
-function extractBingResults(html: string, limit: number): WebSearchResult[] {
+function extractBingResults(html: string, limit: number, query: string, category: SearchEvidenceCategory): WebSearchResult[] {
   const results: WebSearchResult[] = [];
   for (const match of html.matchAll(/<li[^>]*class=["'][^"']*b_algo[^"']*["'][\s\S]*?<h2[^>]*>\s*<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>[\s\S]*?(?:<p[^>]*>([\s\S]*?)<\/p>)?[\s\S]*?<\/li>/gi)) {
     const resultUrl = decode(match[1] ?? "");
@@ -29,13 +29,13 @@ function extractBingResults(html: string, limit: number): WebSearchResult[] {
     const snippet = stripTags(match[3] ?? "");
     if (!/^https?:\/\//i.test(resultUrl) || !title) continue;
     if (results.some((x) => x.url === resultUrl)) continue;
-    results.push({ title, url: resultUrl, snippet });
+    results.push({ title, url: resultUrl, snippet, category, query });
     if (results.length >= limit) break;
   }
   return results;
 }
 
-export async function searchWeb(query: string, limit = 5): Promise<WebSearchResult[]> {
+export async function searchWeb(query: string, limit = 5, category: SearchEvidenceCategory = "market"): Promise<WebSearchResult[]> {
   const url = "https://www.bing.com/search?q=" + encodeURIComponent(query) + "&setlang=ja-JP&cc=JP";
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
@@ -49,7 +49,7 @@ export async function searchWeb(query: string, limit = 5): Promise<WebSearchResu
       }
     });
     if (!response.ok) return [];
-    return extractBingResults(await response.text(), limit);
+    return extractBingResults(await response.text(), limit, query, category);
   } catch {
     return [];
   } finally {
@@ -73,18 +73,17 @@ export async function discoverAcquisitionSignals(input: AcquisitionSearchInput):
     .trim()
     .slice(0, 120);
 
-  const queries = [
-    `${base} 口コミ 評判`,
-    `${base} おすすめ 比較`,
-    `${base} 悩み 目的`,
-    `${base} 競合 商品`,
-    `${base} TikTok Instagram YouTube`,
+  const searches: { query: string; category: SearchEvidenceCategory }[] = [
+    { query: `${base} 口コミ 評判 悩み`, category: "customer_pain" },
+    { query: `${base} 欲しい 理由 メリット`, category: "customer_desire" },
+    { query: `${base} おすすめ 比較 競合`, category: "competitor" },
+    { query: `${base} 市場 トレンド 人気`, category: "market" },
+    { query: `${base} TikTok Instagram YouTube 投稿`, category: "channel" },
   ];
 
-  const groups = await Promise.all(queries.map((query) => searchWeb(query, 5)));
-  const results = groups.flat().filter((result, index, all) =>
+  const groups = await Promise.all(searches.map((item) => searchWeb(item.query, 5, item.category)));  const results = groups.flat().filter((result, index, all) =>
     all.findIndex((x) => x.url === result.url) === index
   ).slice(0, 25);
 
-  return { queries, results };
+  return { queries: searches.map((x) => x.query), results };
 }
