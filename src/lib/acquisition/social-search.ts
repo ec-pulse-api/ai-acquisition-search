@@ -68,7 +68,7 @@ export async function searchTikTokSignals(query: string, limit = 10): Promise<So
 }
 
 export async function discoverSocialSignals(productName: string): Promise<SocialSignal[]> {
-  const base = productName.replace(/\\s+/g, " ").trim().slice(0, 80);
+  const base = productName.replace(/\s+/g, " ").trim().slice(0, 80);
   if (!base) return [];
   const queries = [base, base + " おすすめ", base + " コーデ", base + " レビュー"];
   const groups = await Promise.all(queries.map((query) => searchTikTokSignals(query, 5).catch(() => [])));
