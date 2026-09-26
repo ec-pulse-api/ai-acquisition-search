@@ -40,5 +40,6 @@ export async function analyzePage(source:PageSnapshot,webResults:{query:string;r
   if(!response.ok)throw new Error("AI分析に失敗しました（HTTP "+response.status+"）。");
   const payload=await response.json(); const content=payload.choices?.[0]?.message?.content;
   if(!content)throw new Error("AIから分析結果が返りませんでした。");
-  const parsed=JSON.parse(content) as Partial<AcquisitionAnalysis>;\n  return { ...fallback(source), ...parsed, decision: parsed.decision ?? fallback(source).decision, aiConnected:true };
+  const parsed=JSON.parse(content) as Partial<AcquisitionAnalysis>;
+  return { ...fallback(source, webResults), ...parsed, searchEvidence: parsed.searchEvidence?.length ? parsed.searchEvidence : webResults.results.slice(0,10), decision: parsed.decision ?? fallback(source, webResults).decision, aiConnected:true };
 }
