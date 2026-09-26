@@ -3,8 +3,11 @@ import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import * as z from "zod/v4";
 import { analyzePage } from "../lib/acquisition/analyze";
 import { fetchPageSnapshot } from "../lib/acquisition/fetch-url";
+import { discoverSocialSignals } from "../lib/acquisition/social-search";
+import { discoverShopSignals } from "../lib/acquisition/shop-search";
 import { saveNarrationFile } from "../lib/video/gemini-tts";
 import { generateHiggsfieldVideo } from "../lib/video/higgsfield";
+import { createCampaignId, loadCampaign, saveCampaign } from "../lib/campaign/store";
 import { getTikTokPublishStatus, publishTikTokVideo, queryTikTokCreator } from "../lib/social/tiktok";
 import { getYouTubeVideoStatus, uploadYouTubeVideo } from "../lib/social/youtube";
 import { publishFacebookReel, publishInstagramReel } from "../lib/social/meta";
@@ -27,7 +30,10 @@ function createServer(): McpServer {
     async ({ url }) => {
       try {
         const source = await fetchPageSnapshot(url);
-        const analysis = await analyzePage(source);
+        const productName = source.productName || source.title;
+        const socialSignals = await discoverSocialSignals(productName);
+        const shopSignals = await discoverShopSignals(productName);
+        const analysis = await analyzePage(source, undefined, socialSignals, shopSignals);
 
         return {
           content: [
@@ -92,6 +98,61 @@ function createServer(): McpServer {
           isError: true
         };
       }
+    }
+  );
+
+  server.registerTool(
+    "campaign-save",
+    {
+      description: "AI広告サイクルの状態をgenerated/campaignsに保存します。",
+      inputSchema: z.object({
+        campaignId: z.string().optional(),
+        productUrl: z.string().url(),
+        status: z.enum(["planning", "testing", "learning"]).optional(),
+        hypothesis: z.unknown(),
+        posts: z.array(z.object({
+          platform: z.string(),
+          postId: z.string(),
+          url: z.string().url().optional(),
+          publishedAt: z.string().optional()
+        })).optional(),
+        performance: z.array(z.unknown()).optional()
+      })
+    },
+    async ({ campaignId, productUrl, status, hypothesis, posts, performance }) => {
+      try {
+        const now = new Date().toISOString();
+        const id = campaignId ?? createCampaignId();
+        const existing = campaignId ? await loadCampaign(campaignId) : null;
+        const record = {
+          campaignId: id,
+          productUrl,
+          createdAt: existing?.createdAt ?? now,
+          updatedAt: now,
+          status: status ?? existing?.status ?? "planning",
+          hypothesis,
+          posts: posts ?? existing?.posts ?? [],
+          performance: performance ?? existing?.performance ?? []
+        } as const;
+        const filePath = await saveCampaign(record);
+        return { content: [{ type: "text", text: JSON.stringify({ ...record, filePath }, null, 2) }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "キャンペーン保存に失敗しました。";
+        return { content: [{ type: "text", text: message }], isError: true };
+      }
+    }
+  );
+
+  server.registerTool(
+    "campaign-load",
+    {
+      description: "保存済みAI広告キャンペーンの状態を読み込みます。",
+      inputSchema: z.object({ campaignId: z.string().min(1) })
+    },
+    async ({ campaignId }) => {
+      const record = await loadCampaign(campaignId);
+      if (!record) return { content: [{ type: "text", text: `Campaign not found: ${campaignId}` }], isError: true };
+      return { content: [{ type: "text", text: JSON.stringify(record, null, 2) }] };
     }
   );
 
