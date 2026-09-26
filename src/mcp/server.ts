@@ -6,7 +6,7 @@ import { fetchPageSnapshot } from "../lib/acquisition/fetch-url";
 import { discoverSocialSignals } from "../lib/acquisition/social-search";
 import { discoverShopSignals } from "../lib/acquisition/shop-search";
 import { saveNarrationFile } from "../lib/video/gemini-tts";
-import { generateHiggsfieldVideo } from "../lib/video/higgsfield";
+import { generateHiggsfieldVideo, getHiggsfieldStatus, waitForHiggsfieldVideo } from "../lib/video/higgsfield";
 import { createCampaignId, loadCampaign, saveCampaign } from "../lib/campaign/store";
 import { discoverAcquisitionSignals } from "../lib/acquisition/search-web";
 import { decideNextCampaign } from "../lib/campaign/decision";
@@ -133,8 +133,17 @@ function createServer(): McpServer {
         const prompt = videoPrompt ?? [selected?.concept, selected?.hook, decision.productionBrief.angle, decision.productionBrief.format, decision.productionBrief.cta].filter(Boolean).join(". ");
         let video: unknown = null;
         let narration: unknown = null;
+        let videoUrl: string | undefined;
         if (process.env.HF_API_KEY_ID && process.env.HF_API_KEY_SECRET && prompt) {
-          video = await generateHiggsfieldVideo({ prompt, aspectRatio: "9:16", resolution: "1080p" });
+          const submitted = await generateHiggsfieldVideo({ prompt, aspectRatio: "9:16", resolution: "1080p", generateAudio: false });
+          const requestId = typeof submitted.request_id === "string" ? submitted.request_id : undefined;
+          if (requestId) {
+            video = await waitForHiggsfieldVideo(requestId);
+            const completed = video as Record<string, unknown>;
+            videoUrl = typeof completed.videoUrl === "string" ? completed.videoUrl : undefined;
+          } else {
+            video = submitted;
+          }
         }
         if (narrationText && process.env.GEMINI_API_KEY) {
           narration = await saveNarrationFile({ text: narrationText });
@@ -145,7 +154,7 @@ function createServer(): McpServer {
           hypothesis: decision, posts: [], performance: []
         };
         const filePath = await saveCampaign(record);
-        return { content: [{ type: "text", text: JSON.stringify({ campaignId, publishMode, platforms, analysis, decision, video, narration, filePath, publishing: publishMode === "draft" ? "draft-only" : "platform publishing requires the corresponding authorized publish tool and confirmed asset URL" }, null, 2) }] };
+        return { content: [{ type: "text", text: JSON.stringify({ campaignId, publishMode, platforms, analysis, decision, video, videoUrl, narration, filePath, publishing: publishMode === "draft" ? "draft-only" : "platform publishing requires the corresponding authorized publish tool and confirmed asset URL" }, null, 2) }] };
       } catch (error) {
         const message = error instanceof Error ? error.message : "広告サイクルの実行に失敗しました。";
         return { content: [{ type: "text", text: message }], isError: true };
