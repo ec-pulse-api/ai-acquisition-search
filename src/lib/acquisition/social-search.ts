@@ -55,7 +55,7 @@ export async function searchTikTokSignals(query: string, limit = 10): Promise<So
     return {
       platform: "tiktok" as const,
       title: desc || "TikTok投稿",
-      url: id ? "https://www.tiktok.com/@"+firstString(author.unique_id, author.nickname)+" /video/"+id : "https://www.tiktok.com/",
+      url: id ? "https://www.tiktok.com/@"+firstString(author.unique_id, author.nickname)+"/video/"+id : "https://www.tiktok.com/",
       author: firstString(author.unique_id, author.nickname, "unknown"),
       views: numberValue(stats.play_count ?? stats.views),
       likes: numberValue(stats.digg_count ?? stats.likes),
