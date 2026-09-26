@@ -74,6 +74,6 @@ POST `/api/analyze`
 { "url": "https://example.com/product" }
 ```
 
-`OPENAI_API_KEY` が設定されている場合はLLM分析、未設定の場合はページ抽出ベースの予備分析を返します。\n\n## SNS検索レイヤー\n\n`SCRAPE_CREATORS_API_KEY` を設定すると、Scrape CreatorsのTikTok検索を任意接続し、商品名から関連投稿の公開指標（再生・いいね・コメント・シェア）を取得して意思決定AIの材料にします。未設定でも商品ページ＋Web検索による分析は動作します。\n\n任意の環境変数:\n\n```text\nSCRAPE_CREATORS_API_KEY=...\nSCRAPE_CREATORS_REGION=JP\nSCRAPE_CREATORS_DATE_POSTED=this-month\n```\n\nTikTok検索は外部APIの従量課金を使用するため、キーはサーバー側環境変数だけに保存します。
+`OPENAI_API_KEY` が設定されている場合はLLM分析、未設定の場合はページ抽出ベースの予備分析を返します。\n\n## SNS検索レイヤー\n\n`SCRAPE_CREATORS_API_KEY` を設定すると、Scrape CreatorsのTikTok検索とTikTok Shop検索を任意接続し、商品名から関連投稿の公開指標（再生・いいね・コメント・シェア）と競合商品の価格・販売数・評価などを取得して意思決定AIの材料にします。未設定でも商品ページ＋Web検索による分析は動作します。\n\n任意の環境変数:\n\n```text\nSCRAPE_CREATORS_API_KEY=...\nSCRAPE_CREATORS_REGION=JP\nSCRAPE_CREATORS_DATE_POSTED=this-month\n```\n\nTikTok検索は外部APIの従量課金を使用するため、キーはサーバー側環境変数だけに保存します。
 
 「Acquisition」は企業買収ではなく、**Customer Acquisition（顧客獲得・集客）**を意味します。
