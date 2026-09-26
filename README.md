@@ -170,3 +170,24 @@ APIキーはサーバー側だけで管理し、Gitにコミットしません�
 ## 重要
 
 「Acquisition」は企業買収ではなく、**Customer Acquisition（顧客獲得・集客）**を意味します。
+
+
+## TikTok自動投稿
+
+TikTokは公式Content Posting APIのDirect Postを使います。投稿にはTikTok側のアプリ登録、Content Posting API、認可済みユーザーの `video.publish` 権限が必要です。未監査クライアントの投稿はTikTokの仕様上、テスト中は非公開に制限される場合があります。citeturn0search0turn0search6
+
+環境変数:
+
+```text
+TIKTOK_ACCESS_TOKEN=...
+```
+
+MCPツール:
+
+- `tiktok-creator-info` — 投稿可能な公開範囲などを確認
+- `tiktok-publish` — HTTPS動画URLをDirect Post
+- `tiktok-publish-status` — publish_idの処理状態を確認
+
+動画URL方式を使う場合、TikTokから取得可能なHTTPS公開URLが必要です。AI生成動画は `is_aigc=true` を既定値として送信します。citeturn0search0turn0search6
+
+次のSNSも同じ構造で公式APIを接続します。YouTubeは `videos.insert` によるアップロードが公式に提供されています。citeturn0search10
