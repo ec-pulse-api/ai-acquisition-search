@@ -2,7 +2,7 @@ import type { AcquisitionAnalysis, PageSnapshot } from "./types";
 import { buildAcquisitionPrompt } from "./prompts";
 import type { WebSearchResult } from "./search-web";
 
-function fallback(source: PageSnapshot): AcquisitionAnalysis {
+function fallback(source: PageSnapshot, webResults: { query: string; results: WebSearchResult[] } = { query: "", results: [] }): AcquisitionAnalysis {
   const evidence=[source.title,source.description,...source.headings].filter(Boolean).slice(0,8);
   const words=source.text.match(/(?:法人|企業|個人|初心者|担当者|経営者|マーケティング|開発者|店舗|EC|クリエイター)/gi)??[];
   const segment=[...new Set(words)].slice(0,3);
@@ -26,13 +26,13 @@ function fallback(source: PageSnapshot): AcquisitionAnalysis {
       {rank:2,concept:productName+"の比較型",hook:"似た商品を買う前に、この3つを比較してください。",format:"比較型短尺",channel:"TikTok / Instagram Reels",reason:"比較検討層の反応を検証するため",testMetric:"保存率・クリック率"},
       {rank:3,concept:productName+"の使用シーン型",hook:"実際に使うなら、この場面で違いが出ます。",format:"使用シーン紹介",channel:"TikTok / Instagram Reels",reason:"利用イメージの反応を検証するため",testMetric:"クリック率・購入率"}
     ],
-    searchEvidence:[],aiConnected:false
+    searchEvidence:webResults.results.slice(0,10),aiConnected:false
   };
 }
 
 export async function analyzePage(source:PageSnapshot,webResults:{query:string;results:WebSearchResult[]}={query:"",results:[]}):Promise<AcquisitionAnalysis>{
   const apiKey=process.env.OPENAI_API_KEY;
-  if(!apiKey)return fallback(source);
+  if(!apiKey)return fallback(source, webResults);
   const response=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+apiKey},body:JSON.stringify({
     model:process.env.OPENAI_MODEL||"gpt-5-mini",temperature:0.2,response_format:{type:"json_object"},
     messages:[{role:"system",content:"あなたはB2C/B2Bの顧客獲得戦略を分析する慎重なマーケティングアナリストです。"},{role:"user",content:buildAcquisitionPrompt(source,webResults)}]
