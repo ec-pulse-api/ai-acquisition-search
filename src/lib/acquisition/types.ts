@@ -8,29 +8,9 @@ export type AcquisitionAnalysis = {
   opportunities: string[];
   priorities: { priority: number; action: string; reason: string; channel: string }[];
   nextActions: string[];
-  nextPosts: {
-    rank: number;
-    concept: string;
-    hook: string;
-    format: string;
-    channel: string;
-    reason: string;
-    testMetric: string;
-  }[];
+  nextPosts: { rank: number; concept: string; hook: string; format: string; channel: string; reason: string; testMetric: string }[];
+  searchEvidence: { query: string; title: string; url: string; snippet: string }[];
   aiConnected: boolean;
 };
-
-export type PageSnapshot = {
-  url: string;
-  title: string;
-  description: string;
-  headings: string[];
-  text: string;
-  links: string[];
-  productSignals: string[];
-};
-
-export type AcquisitionAnalyzeResult = {
-  source: PageSnapshot;
-  analysis: AcquisitionAnalysis;
-};
+export type PageSnapshot = { url: string; title: string; description: string; headings: string[]; text: string; links: string[]; productSignals: string[] };
+export type AcquisitionAnalyzeResult = { source: PageSnapshot; analysis: AcquisitionAnalysis };
