@@ -8,6 +8,8 @@ import { discoverShopSignals } from "../lib/acquisition/shop-search";
 import { saveNarrationFile } from "../lib/video/gemini-tts";
 import { generateHiggsfieldVideo } from "../lib/video/higgsfield";
 import { createCampaignId, loadCampaign, saveCampaign } from "../lib/campaign/store";
+import { discoverAcquisitionSignals } from "../lib/acquisition/search-web";
+import { decideNextCampaign } from "../lib/campaign/decision";
 import { getTikTokPublishStatus, publishTikTokVideo, queryTikTokCreator } from "../lib/social/tiktok";
 import { getYouTubeVideoStatus, uploadYouTubeVideo } from "../lib/social/youtube";
 import { publishFacebookReel, publishInstagramReel } from "../lib/social/meta";
@@ -97,6 +99,56 @@ function createServer(): McpServer {
           content: [{ type: "text", text: message }],
           isError: true
         };
+      }
+    }
+  );
+
+  server.registerTool(
+    "run-ad-cycle",
+    {
+      description: "商品URLから分析→次広告決定→Higgsfield動画生成→ナレーションまでを1回の広告サイクルとして実行します。SNS投稿は認可とpublishModeを確認してから実行します。",
+      inputSchema: z.object({
+        url: z.string().url(),
+        publishMode: z.enum(["draft", "approval", "autonomous"]).default("draft"),
+        narrationText: z.string().optional(),
+        platforms: z.array(z.enum(["tiktok", "youtube", "instagram", "facebook", "x"])).default([]),
+        videoPrompt: z.string().optional()
+      })
+    },
+    async ({ url, publishMode, narrationText, platforms, videoPrompt }) => {
+      try {
+        const source = await fetchPageSnapshot(url);
+        const productName = source.productName || source.title;
+        const socialSignals = await discoverSocialSignals(productName);
+        const shopSignals = await discoverShopSignals(productName);
+        const search = await discoverAcquisitionSignals({
+          productName,
+          description: source.description,
+          productSignals: source.productSignals,
+          productCategory: source.productCategory
+        });
+        const analysis = await analyzePage(source, { query: search.queries.join(" / "), results: search.results }, socialSignals, shopSignals);
+        const decision = decideNextCampaign({ analysis });
+        const selected = decision.nextTests[0];
+        const prompt = videoPrompt ?? [selected?.concept, selected?.hook, decision.productionBrief.angle, decision.productionBrief.format, decision.productionBrief.cta].filter(Boolean).join(". ");
+        let video: unknown = null;
+        let narration: unknown = null;
+        if (process.env.HF_API_KEY_ID && process.env.HF_API_KEY_SECRET && prompt) {
+          video = await generateHiggsfieldVideo({ prompt, aspectRatio: "9:16", resolution: "1080p" });
+        }
+        if (narrationText && process.env.GEMINI_API_KEY) {
+          narration = await saveNarrationFile({ text: narrationText });
+        }
+        const campaignId = createCampaignId();
+        const record = {
+          campaignId, productUrl: url, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), status: "planning" as const,
+          hypothesis: decision, posts: [], performance: []
+        };
+        const filePath = await saveCampaign(record);
+        return { content: [{ type: "text", text: JSON.stringify({ campaignId, publishMode, platforms, analysis, decision, video, narration, filePath, publishing: publishMode === "draft" ? "draft-only" : "platform publishing requires the corresponding authorized publish tool and confirmed asset URL" }, null, 2) }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "広告サイクルの実行に失敗しました。";
+        return { content: [{ type: "text", text: message }], isError: true };
       }
     }
   );
