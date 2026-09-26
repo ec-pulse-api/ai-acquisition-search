@@ -10,9 +10,9 @@ import { generateHiggsfieldVideo, getHiggsfieldStatus, waitForHiggsfieldVideo } 
 import { createCampaignId, loadCampaign, saveCampaign } from "../lib/campaign/store";
 import { discoverAcquisitionSignals } from "../lib/acquisition/search-web";
 import { decideNextCampaign } from "../lib/campaign/decision";
-import { getTikTokPublishStatus, publishTikTokVideo, queryTikTokCreator } from "../lib/social/tiktok";
+import { getTikTokPublishStatus, getTikTokVideoMetrics, publishTikTokVideo, queryTikTokCreator } from "../lib/social/tiktok";
 import { getYouTubeVideoStatus, uploadYouTubeVideo } from "../lib/social/youtube";
-import { publishFacebookReel, publishInstagramReel } from "../lib/social/meta";
+import { getFacebookReelMetrics, getInstagramReelMetrics, publishFacebookReel, publishInstagramReel } from "../lib/social/meta";
 import { publishXPost } from "../lib/social/x";
 import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -491,9 +491,21 @@ function createServer(): McpServer {
     async ({ platform, postId }) => {
       try {
         const { normalizeXPerformance, normalizeYouTubePerformance } = await import("../lib/analytics/performance");
-        const result = platform === "x"
-          ? await normalizeXPerformance(await getXPostMetrics(postId))
-          : await normalizeYouTubePerformance(await getYouTubeVideoStatus(postId));
+        let result;
+        if (platform === "x") {
+          result = await normalizeXPerformance(await getXPostMetrics(postId));
+        } else if (platform === "youtube") {
+          result = await normalizeYouTubePerformance(await getYouTubeVideoStatus(postId));
+        } else if (platform === "tiktok") {
+          const { normalizeTikTokPerformance } = await import("../lib/analytics/performance");
+          result = await normalizeTikTokPerformance(await getTikTokVideoMetrics(postId));
+        } else if (platform === "instagram") {
+          const { normalizeInstagramPerformance } = await import("../lib/analytics/performance");
+          result = await normalizeInstagramPerformance(await getInstagramReelMetrics(postId));
+        } else {
+          const { normalizeFacebookPerformance } = await import("../lib/analytics/performance");
+          result = await normalizeFacebookPerformance(await getFacebookReelMetrics(postId));
+        }
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (error) {
         const message = error instanceof Error ? error.message : "実績取得に失敗しました。";
