@@ -1,40 +1,24 @@
 # AI Acquisition Search
 
-AI-powered acquisition intelligence workspace for discovering, researching, and comparing potential acquisition targets.
+**AI集客検索エンジン**
 
-## Current capabilities
+商品・サービスURLから、商品・市場・顧客・競合・実績を分析し、集客課題・機会・優先順位・次に取るべき集客アクションを判断するAIシステム。
 
-- Acquisition target search UI
-- Shared acquisition target data model
-- Search API at `/api/targets`
-- Target thesis pages at `/targets/[id]`
-- Import payload validation at `POST /api/targets/import`
+## MVP
+1. 商品・サービスURLを入力
+2. **「集客分析を開始」**
+3. 公開ページの情報を取得
+4. 商品 / 市場 / 顧客 / 競合 / 実績を分析
+5. 集客課題と機会を整理
+6. 優先順位を付ける
+7. **次にやるべき集客アクション**を提示
 
-## Data status
-
-The included target universe is **sample data**. It is intentionally not presented as verified live acquisition listings.
-
-The import layer is designed so external datasets can be normalized into the same target model before persistence is added.
-
-## Development
-
-```bash
-npm install
-npm run dev
+## API
+POST /api/analyze
+```json
+{ "url": "https://example.com/product" }
 ```
 
-Then open http://localhost:3000.
+OPENAI_API_KEY が設定されている場合はLLM分析、未設定の場合はページ抽出ベースの予備分析を返します。
 
-## Product direction
-
-The intended workflow is:
-
-1. Discover acquisition candidates
-2. Normalize source data
-3. Search and filter the target universe
-4. Generate an acquisition thesis
-5. Validate revenue, growth, ownership, and other due-diligence signals
-6. Save and compare targets
-7. Build a focused deal pipeline
-
-Live source connectors, persistent storage, authentication, and AI-generated research are intentionally not claimed until they are actually connected.
+「Acquisition」は企業買収ではなく、**Customer Acquisition（顧客獲得・集客）**を意味します。
