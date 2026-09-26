@@ -11,6 +11,7 @@ export type AcquisitionAnalysis = {
   priorities: { priority: number; action: string; reason: string; channel: string }[];
   nextActions: string[];
   nextPosts: { rank: number; concept: string; hook: string; format: string; channel: string; reason: string; testMetric: string }[];
+  decision: AcquisitionDecision;
   searchEvidence: { query: string; category: "customer_pain" | "customer_desire" | "competitor" | "market" | "channel"; title: string; url: string; snippet: string }[];
   aiConnected: boolean;
 };
