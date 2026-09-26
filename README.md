@@ -1,50 +1,122 @@
-# AI Acquisition Search
+# AI Acquisition Search / AI Brand Operator
 
-**AI集客検索エンジン / Claude Code 拡張機能**
+**Claude Code拡張機能として動くAI集客・広告運用エージェント**
 
-商品・サービスURLから、商品・市場・顧客・競合・実績を分析し、集客課題・機会・優先順位・次に取るべき集客アクションを判断するAIシステムです。
+商品・サービスを理解し、市場・顧客・競合・SNSシグナルから「次に何を出すか」を判断し、専門のクリエイティブ生成サービスとSNS連携につなげるためのAI集客システムです。
 
-## MVP
+## 最終ゴール
 
-1. 商品・サービスURLを入力
-2. **「集客分析を開始」**
-3. 公開ページの情報を取得
-4. 商品 / 市場 / 顧客 / 競合 / 実績を分析
-5. 集客課題と機会を整理
-6. 優先順位を付ける
-7. **次にやるべき集客アクション**を提示
+このプロジェクトの目的は動画生成ツールを自作することではありません。
 
-## Claude Code 拡張機能
+**AIが広告運用そのものを担当すること**を目指します。
 
-このリポジトリはClaude Codeプラグインとしても利用できる構成です。
-
-- Plugin manifest: `.claude-plugin/plugin.json`
-- MCP configuration: `.mcp.json`
-- MCP tool: `analyze-acquisition`
-- MCP server: `src/mcp/server.ts`
-
-Claude CodeからURLを渡すと、Webページ取得 → 集客分析 → 次のアクションまでを1回のツール呼び出しで実行できます。
-
-### MCP tool
-
-入力:
-
-```json
-{ "url": "https://example.com/product" }
+```
+商品・サービス
+    ↓
+商品理解 / 市場分析 / 顧客分析 / 競合分析
+    ↓
+広告仮説
+    ↓
+「誰に・何を・どこで・どう出すか」
+    ↓
+クリエイティブ制作指示
+    ↓
+Higgsfield等の専門生成サービス
+    ↓
+Gemini TTS等でナレーション
+    ↓
+完成広告
+    ↓
+各SNSへ投稿・配信
+    ↓
+CTR / CVR / CPA / ROAS等を取得
+    ↓
+AIが結果を分析
+    ↓
+次の広告を決定
+    ↓
+再制作 → 再投稿
 ```
 
-出力:
+## Claude Code拡張機能
 
-- 取得したページ情報
-- 商品分析
-- 市場分析
-- 顧客分析
-- 競合分析
-- 実績分析
-- 集客課題
-- 集客機会
-- 優先順位
-- 次にやるべき集客アクション
+現在のPlugin構成:
+
+- `.claude-plugin/plugin.json`
+- `.mcp.json`
+- `src/mcp/server.ts`
+- `skills/ai-brand-operator/SKILL.md`
+- `commands/ai-acquire.md`
+
+主な機能:
+
+- `analyze-acquisition` — 商品・市場・顧客・競合・実績を分析
+- `generate-narration` — Gemini TTSによるナレーション生成
+- `/ai-acquire` — 分析 → 広告仮説 → 制作指示 → 投稿準備までのオーケストレーション
+
+## 動画生成の考え方
+
+動画生成エンジンは自作しません。
+
+HiggsfieldはClaude CodeなどのAIエージェント向けにCLI/Skillsを提供しており、公式MCPも提供しています。したがって、このPluginは集客判断・制作指示を担当し、動画生成は接続されたHiggsfield側へ委譲します。
+
+将来的な接続:
+
+```
+AI Brand Operator
+       ↓
+production brief
+       ↓
+Higgsfield
+       ↓
+video asset
+       +
+Gemini TTS
+       ↓
+narration
+       ↓
+final creative
+```
+
+## 自動SNS運用
+
+次の段階では、各SNSの**公式APIまたは認可済み連携**を使って、
+
+1. 投稿素材を準備
+2. 投稿
+3. 投稿ID / URLを保存
+4. パフォーマンスを取得
+5. AIが評価
+6. 次のテストを決定
+
+まで自動化します。
+
+接続されていないSNSについては、投稿済みと偽らず、投稿用ペイロードを生成して「公開待ち」として扱います。
+
+## AI自律運用
+
+最終的には:
+
+```
+企画
+ ↓
+制作
+ ↓
+投稿
+ ↓
+計測
+ ↓
+分析
+ ↓
+改善
+ ↓
+次の企画
+ ↺
+```
+
+を継続的に回します。
+
+人間が設定するのは、商品、予算、ブランドルール、運用範囲などです。
 
 ## ローカル開発
 
@@ -54,58 +126,47 @@ npm run build
 npm run dev
 ```
 
-Web UI:
-
-`http://localhost:3000`（使用中の場合はNext.jsが空いているポートを使用）
-
-MCPサーバー単体:
+MCPサーバー:
 
 ```powershell
 npm run mcp
 ```
 
-MCPサーバーはstdioを使用するため、通常はClaude Codeから起動します。
+## 環境変数
 
-## Web API
+### 集客分析
 
-POST `/api/analyze`
-
-```json
-{ "url": "https://example.com/product" }
+```text
+OPENAI_API_KEY=...
 ```
 
-`OPENAI_API_KEY` が設定されている場合はLLM分析、未設定の場合はページ抽出ベースの予備分析を返します。\n\n## SNS検索レイヤー\n\n`SCRAPE_CREATORS_API_KEY` を設定すると、Scrape CreatorsのTikTok検索とTikTok Shop検索を任意接続し、商品名から関連投稿の公開指標（再生・いいね・コメント・シェア）と競合商品の価格・販売数・評価などを取得して意思決定AIの材料にします。未設定でも商品ページ＋Web検索による分析は動作します。\n\n任意の環境変数:\n\n```text\nSCRAPE_CREATORS_API_KEY=...\nSCRAPE_CREATORS_REGION=JP\nSCRAPE_CREATORS_DATE_POSTED=this-month\n```\n\nTikTok検索は外部APIの従量課金を使用するため、キーはサーバー側環境変数だけに保存します。
+### TikTok / TikTok Shopシグナル（任意）
 
-「Acquisition」は企業買収ではなく、**Customer Acquisition（顧客獲得・集客）**を意味します。
+```text
+SCRAPE_CREATORS_API_KEY=...
+SCRAPE_CREATORS_REGION=JP
+SCRAPE_CREATORS_DATE_POSTED=this-month
+```
 
-## 動画制作エンジン / Gemini TTS
-
-Claude Code拡張機能から動画制作の前段としてナレーションを生成できます。Gemini 3.8 Flash TTSをサーバー側から呼び出し、24kHz WAVとして保存します。Googleの現行APIでは `gemini-3.8-flash-tts` がTTSモデルとして提供されています。
-
-環境変数:
+### Gemini TTS（任意）
 
 ```text
 GEMINI_API_KEY=...
-GEMINI_TTS_MODEL=gemini-3.8-flash-tts
+GEMINI_TTS_MODEL=...
 GEMINI_TTS_VOICE=Kore
 ```
 
-Web UIでは分析結果からナレーション本文を自動生成し、「ナレーションを生成」で音声を試聴・WAV保存できます。
+モデル名は利用中のGoogle Gemini APIで有効なTTSモデルに合わせて設定してください。
 
-Claude Code拡張機能では `generate-narration` MCP tool が追加され、生成した `narration.wav` を `generated/` に保存します。
+### Higgsfield API（API方式を使う場合）
 
-現在の動画エンジンの接続順:
-
+```text
+HF_API_KEY_ID=...
+HF_API_KEY_SECRET=...
 ```
-集客分析
-  ↓
-ナレーション本文
-  ↓
-Gemini 3.8 Flash TTS
-  ↓
-WAV
-  ↓
-動画AI映像 + 字幕 + BGM
-  ↓
-完成MP4
-```
+
+APIキーはサーバー側だけで管理し、Gitにコミットしません。
+
+## 重要
+
+「Acquisition」は企業買収ではなく、**Customer Acquisition（顧客獲得・集客）**を意味します。
