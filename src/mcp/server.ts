@@ -257,6 +257,40 @@ function createServer(): McpServer {
     }
   );
 
+  server.registerTool(
+    "x-publish",
+    {
+      description: "X API v2で認可済みアカウントへテキスト投稿します。",
+      inputSchema: z.object({ text: z.string().min(1).max(280) })
+    },
+    async ({ text }) => {
+      try {
+        const result = await publishXPost({ text });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "X投稿に失敗しました。";
+        return { content: [{ type: "text", text: message }], isError: true };
+      }
+    }
+  );
+
+  server.registerTool(
+    "x-post-metrics",
+    {
+      description: "X投稿の公開メトリクスを取得します。",
+      inputSchema: z.object({ postId: z.string().min(1) })
+    },
+    async ({ postId }) => {
+      try {
+        const result = await getXPostMetrics(postId);
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "X投稿のメトリクス取得に失敗しました。";
+        return { content: [{ type: "text", text: message }], isError: true };
+      }
+    }
+  );
+
   return server;
 }
 
