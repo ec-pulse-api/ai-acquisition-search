@@ -103,3 +103,25 @@ export async function getTikTokPublishStatus(publishId: string) {
 
   return payload.data;
 }
+
+
+export async function getTikTokVideoMetrics(postId: string) {
+  const response = await fetch(
+    `${TIKTOK_API_BASE}/video/query/?fields=id,share_url,like_count,comment_count,share_count,view_count,is_aigc`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${getAccessToken()}`,
+        "Content-Type": "application/json; charset=UTF-8",
+      },
+      body: JSON.stringify({ filters: { video_ids: [postId] } }),
+    },
+  );
+  const payload = await response.json();
+  if (!response.ok || payload?.error?.code !== "ok") {
+    throw new Error(payload?.error?.message || `TikTok video query failed: ${response.status}`);
+  }
+  const video = payload?.data?.videos?.[0];
+  if (!video) throw new Error(`TikTok video not found: ${postId}`);
+  return video;
+}
