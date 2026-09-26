@@ -61,24 +61,26 @@ export type AcquisitionSearchInput = {
   productName: string;
   description: string;
   productSignals?: string[];
+  productCategory?: string;
 };
 
 export async function discoverAcquisitionSignals(input: AcquisitionSearchInput): Promise<{
   queries: string[];
   results: WebSearchResult[];
 }> {
-  const signal = (input.productSignals ?? []).find((x) => x.length >= 4) ?? "";
-  const base = (signal || input.productName || input.description || "商品")
+  const base = (input.productName || input.productSignals?.[0] || input.description || "商品")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 120);
+    .slice(0, 100);
+  const category = (input.productCategory || "").replace(/\s+/g, " ").trim().slice(0, 50);
+  const context = category && !base.includes(category) ? base + " " + category : base;
 
   const searches: { query: string; category: SearchEvidenceCategory }[] = [
-    { query: `${base} 口コミ 評判 悩み`, category: "customer_pain" },
-    { query: `${base} 欲しい 理由 メリット`, category: "customer_desire" },
-    { query: `${base} おすすめ 比較 競合`, category: "competitor" },
-    { query: `${base} 市場 トレンド 人気`, category: "market" },
-    { query: `${base} TikTok Instagram YouTube 投稿`, category: "channel" },
+    { query: context + " 口コミ 評判 悩み", category: "customer_pain" },
+    { query: context + " 欲しい 理由 メリット", category: "customer_desire" },
+    { query: context + " おすすめ 比較 競合", category: "competitor" },
+    { query: context + " 市場 トレンド 人気", category: "market" },
+    { query: context + " TikTok Instagram YouTube 投稿", category: "channel" },
   ];
 
   const groups = await Promise.all(searches.map((item) => searchWeb(item.query, 5, item.category)));  const results = groups.flat().filter((result, index, all) =>
