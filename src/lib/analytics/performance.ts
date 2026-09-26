@@ -48,3 +48,58 @@ export async function normalizeYouTubePerformance(input: any): Promise<Normalize
     raw: input,
   };
 }
+
+
+export async function normalizeTikTokPerformance(input: any): Promise<NormalizedPerformance> {
+  return {
+    platform: "tiktok",
+    postId: String(input.id),
+    url: input.share_url,
+    collectedAt: new Date().toISOString(),
+    metrics: {
+      views: input.view_count ?? null,
+      likes: input.like_count ?? null,
+      comments: input.comment_count ?? null,
+      shares: input.share_count ?? null,
+    },
+    raw: input,
+  };
+}
+
+export async function normalizeInstagramPerformance(input: any): Promise<NormalizedPerformance> {
+  const m = input?.metrics ?? input ?? {};
+  const get = (name: string) => {
+    const item = Array.isArray(input?.data) ? input.data.find((x: any) => x.name === name) : undefined;
+    return item?.values?.at?.(-1)?.value ?? m[name] ?? null;
+  };
+  return {
+    platform: "instagram",
+    postId: String(input.id ?? input.mediaId),
+    url: input.permalink,
+    collectedAt: new Date().toISOString(),
+    metrics: {
+      views: get("views") ?? get("plays"),
+      likes: get("likes"),
+      comments: get("comments"),
+      shares: get("shares"),
+    },
+    raw: input,
+  };
+}
+
+export async function normalizeFacebookPerformance(input: any): Promise<NormalizedPerformance> {
+  const s = input?.statistics ?? input ?? {};
+  return {
+    platform: "facebook",
+    postId: String(input.id ?? input.videoId),
+    url: input.permalink_url,
+    collectedAt: new Date().toISOString(),
+    metrics: {
+      views: s.views ?? s.total_video_views ?? null,
+      likes: s.likes ?? s.reactions?.summary?.total_count ?? null,
+      comments: s.comments ?? s.comments_count ?? null,
+      shares: s.shares ?? s.share_count ?? null,
+    },
+    raw: input,
+  };
+}
