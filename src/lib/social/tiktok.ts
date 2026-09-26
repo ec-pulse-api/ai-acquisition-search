@@ -17,6 +17,7 @@ export type TikTokPublishInput = {
   disableStitch?: boolean;
   isAigc?: boolean;
   brandOrganicToggle?: boolean;
+  videoCoverTimestampMs?: number;
 };
 
 export async function queryTikTokCreator() {
@@ -64,6 +65,7 @@ export async function publishTikTokVideo(input: TikTokPublishInput) {
         disable_stitch: input.disableStitch ?? false,
         is_aigc: input.isAigc ?? true,
         brand_organic_toggle: input.brandOrganicToggle ?? false,
+        video_cover_timestamp_ms: input.videoCoverTimestampMs,
       },
       source_info: {
         source: "PULL_FROM_URL",
