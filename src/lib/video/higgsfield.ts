@@ -21,7 +21,7 @@ function credentials() {
 }
 
 function modelPath(model: string) {
-  return model.replace(/^\\/+|\\/+$/g, "");
+  return model.replace(/^\/+|\/+$/g, "");
 }
 
 async function requestHiggsfield(path: string, init: RequestInit) {
