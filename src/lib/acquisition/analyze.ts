@@ -23,7 +23,7 @@ function fallback(source: PageSnapshot, webResults: { query: string; results: We
       {priority:3,action:"アクセス・CV・売上を記録して次の判断材料にする",reason:"実績ベースの最適化に必要なため",channel:"Analytics / EC"}
     ],
     nextActions:["顧客・競合・訴求候補を検索する","異なる訴求の投稿を3本テストする","アクセス・CV・売上を記録する"],
-    decision:{target:segment.length?segment.join(" / "):"公開ページから顧客像を特定できていない",problem:"顧客の具体的な悩みを外部情報で追加検証する",desire:"商品ページで示されている便益を実際の顧客表現で検証する",valueProposition:source.headings.slice(0,3).join(" / ")||"商品ページの主要便益を検証する",channel:"TikTok / Instagram Reels",format:"悩み起点の短尺投稿",testPlan:"異なる訴求を3本出し、視聴維持率・クリック率・購入率を比較する",evidence:evidence.slice(0,5)] ,
+    decision:{target:segment.length?segment.join(" / "):"公開ページから顧客像を特定できていない",problem:"顧客の具体的な悩みを外部情報で追加検証する",desire:"商品ページで示されている便益を実際の顧客表現で検証する",valueProposition:source.headings.slice(0,3).join(" / ")||"商品ページの主要便益を検証する",channel:"TikTok / Instagram Reels",format:"悩み起点の短尺投稿",testPlan:"異なる訴求を3本出し、視聴維持率・クリック率・購入率を比較する",evidence:evidence.slice(0,5)} ,
     nextPosts:[
       {rank:1,concept:productName+"の悩み解決型",hook:"この商品が必要になる人は、まずここを見てください。",format:"15〜30秒短尺",channel:"TikTok / Instagram Reels",reason:"悩み起点の反応を検証するため",testMetric:"視聴維持率・クリック率"},
       {rank:2,concept:productName+"の比較型",hook:"似た商品を買う前に、この3つを比較してください。",format:"比較型短尺",channel:"TikTok / Instagram Reels",reason:"比較検討層の反応を検証するため",testMetric:"保存率・クリック率"},
