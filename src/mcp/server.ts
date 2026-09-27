@@ -13,7 +13,7 @@ import { decideNextCampaign } from "../lib/campaign/decision";
 import { getTikTokPublishStatus, getTikTokVideoMetrics, publishTikTokVideo, queryTikTokCreator, resolveTikTokVideoId } from "../lib/social/tiktok";
 import { getYouTubeVideoStatus, uploadYouTubeVideo } from "../lib/social/youtube";
 import { getFacebookReelMetrics, getInstagramReelMetrics, publishFacebookReel, publishInstagramReel } from "../lib/social/meta";
-import { publishXPost } from "../lib/social/x";
+import { publishXPost, getXPostMetrics } from "../lib/social/x";
 import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 
@@ -171,7 +171,7 @@ function createServer(): McpServer {
         }
         const publishResults: unknown[] = [];
         const posts: Array<{ platform: string; postId: string; url?: string; publishedAt?: string }> = [];
-        const caption = selected?.hook || decision.productionBrief.objective || productName;
+        const caption = selected?.hook || decision.productionBrief?.objective || productName;
 
         if (publishMode === "autonomous" && videoUrl) {
           if (platforms.includes("tiktok") && process.env.TIKTOK_ACCESS_TOKEN) {
@@ -181,17 +181,17 @@ function createServer(): McpServer {
           }
           if (platforms.includes("instagram") && process.env.META_ACCESS_TOKEN && process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID) {
             const result = await publishInstagramReel({ videoUrl, caption });
-            publishResults.push({ platform: "instagram", ...result });
+            publishResults.push({ ...result });
             if (result.mediaId) posts.push({ platform: "instagram", postId: result.mediaId, publishedAt: new Date().toISOString() });
           }
           if (platforms.includes("facebook") && process.env.META_ACCESS_TOKEN && process.env.FACEBOOK_PAGE_ID) {
             const result = await publishFacebookReel({ videoUrl, caption });
-            publishResults.push({ platform: "facebook", ...result });
+            publishResults.push({ ...result });
             if (result.videoId) posts.push({ platform: "facebook", postId: result.videoId, publishedAt: new Date().toISOString() });
           }
           if (platforms.includes("x") && process.env.X_ACCESS_TOKEN) {
             const result = await publishXPost({ text: caption });
-            publishResults.push({ platform: "x", ...result });
+            publishResults.push({ ...result });
             if (result.postId) posts.push({ platform: "x", postId: result.postId, url: result.url, publishedAt: new Date().toISOString() });
           }
           if (platforms.includes("youtube") && process.env.YOUTUBE_ACCESS_TOKEN) {
@@ -200,9 +200,9 @@ function createServer(): McpServer {
             const response = await fetch(videoUrl);
             if (!response.ok) throw new Error(`動画ファイル取得に失敗しました（HTTP ${response.status}）。`);
             await writeFile(outputPath, Buffer.from(await response.arrayBuffer()));
-            const result = await uploadYouTubeVideo({ filePath: outputPath, title: caption, description: decision.productionBrief.objective });
+            const result = await uploadYouTubeVideo({ filePath: outputPath, title: caption, description: decision.productionBrief?.objective ?? "" });
             publishResults.push({ platform: "youtube", ...result });
-            if (result.videoId) posts.push({ platform: "youtube", postId: result.videoId, url: result.url, publishedAt: new Date().toISOString() });
+            if (result.videoId) posts.push({ platform: "youtube", postId: result.videoId, url: result.url ?? undefined, publishedAt: new Date().toISOString() });
           }
         }
 
