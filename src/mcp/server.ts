@@ -36,23 +36,6 @@ function createServer(): McpServer {
       try {
         const source = await fetchPageSnapshot(url);
         const productName = source.productName || source.title;
-        const previousCampaign = campaignId ? await loadCampaign(campaignId) : null;
-        const previousPerformance: any[] = [];
-        if (previousCampaign?.posts?.length) {
-          const { normalizeXPerformance, normalizeYouTubePerformance, normalizeTikTokPerformance, normalizeInstagramPerformance, normalizeFacebookPerformance } = await import("../lib/analytics/performance");
-          const { getXPostMetrics } = await import("../lib/social/x");
-          for (const post of previousCampaign.posts) {
-            try {
-              if (post.platform === "x") previousPerformance.push(await normalizeXPerformance(await getXPostMetrics(post.postId)));
-              else if (post.platform === "youtube") previousPerformance.push(await normalizeYouTubePerformance(await getYouTubeVideoStatus(post.postId)));
-              else if (post.platform === "tiktok") previousPerformance.push(await normalizeTikTokPerformance(await getTikTokVideoMetrics(post.postId)));
-              else if (post.platform === "instagram") previousPerformance.push(await normalizeInstagramPerformance(await getInstagramReelMetrics(post.postId)));
-              else if (post.platform === "facebook") previousPerformance.push(await normalizeFacebookPerformance(await getFacebookReelMetrics(post.postId)));
-            } catch (error) {
-              previousPerformance.push({ platform: post.platform, postId: post.postId, metrics: {}, collectionError: error instanceof Error ? error.message : String(error) });
-            }
-          }
-        }
         const socialSignals = await discoverSocialSignals(productName);
         const shopSignals = await discoverShopSignals(productName);
         const analysis = await analyzePage(source, undefined, socialSignals, shopSignals);
@@ -215,6 +198,70 @@ function createServer(): McpServer {
         return { content: [{ type: "text", text: JSON.stringify({ campaignId: newCampaignId, publishMode, platforms, analysis, decision, previousPerformance, video, videoUrl, narration, publishResults, filePath, publishing: publishMode === "autonomous" ? "autonomous publish attempted for configured platforms" : "not published" }, null, 2) }] };
       } catch (error) {
         const message = error instanceof Error ? error.message : "広告サイクルの実行に失敗しました。";
+        return { content: [{ type: "text", text: message }], isError: true };
+      }
+    }
+  );
+
+  server.registerTool(
+    "social-connection-status",
+    {
+      description: "SNS・動画生成・AI検索サービスの接続状態を確認します。APIキーやトークンの値は返しません。",
+      inputSchema: z.object({})
+    },
+    async () => {
+      const services = {
+        tiktok: Boolean(process.env.TIKTOK_ACCESS_TOKEN),
+        instagram: Boolean(process.env.META_ACCESS_TOKEN && process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID),
+        facebook: Boolean(process.env.META_ACCESS_TOKEN && process.env.FACEBOOK_PAGE_ID),
+        youtube: Boolean(process.env.YOUTUBE_ACCESS_TOKEN),
+        x: Boolean(process.env.X_ACCESS_TOKEN),
+        higgsfield: Boolean(process.env.HF_API_KEY_ID && process.env.HF_API_KEY_SECRET),
+        geminiTts: Boolean(process.env.GEMINI_API_KEY),
+        scrapeCreators: Boolean(process.env.SCRAPE_CREATORS_API_KEY),
+        openai: Boolean(process.env.OPENAI_API_KEY)
+      };
+      return { content: [{ type: "text", text: JSON.stringify({ services, configuredCount: Object.values(services).filter(Boolean).length, total: Object.keys(services).length }, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "collect-campaign-performance",
+    {
+      description: "保存済みキャンペーンの全投稿から最新実績を取得し、campaign recordのperformanceへ保存します。",
+      inputSchema: z.object({ campaignId: z.string().min(1) })
+    },
+    async ({ campaignId }) => {
+      try {
+        const campaign = await loadCampaign(campaignId);
+        if (!campaign) {
+          return { content: [{ type: "text", text: `Campaign not found: ${campaignId}` }], isError: true };
+        }
+        const { normalizeXPerformance, normalizeYouTubePerformance, normalizeTikTokPerformance, normalizeInstagramPerformance, normalizeFacebookPerformance } = await import("../lib/analytics/performance");
+        const { getXPostMetrics } = await import("../lib/social/x");
+        const results: unknown[] = [];
+        for (const post of campaign.posts) {
+          try {
+            let normalized;
+            if (post.platform === "x") normalized = await normalizeXPerformance(await getXPostMetrics(post.postId));
+            else if (post.platform === "youtube") normalized = await normalizeYouTubePerformance(await getYouTubeVideoStatus(post.postId));
+            else if (post.platform === "tiktok") normalized = await normalizeTikTokPerformance(await getTikTokVideoMetrics(post.postId));
+            else if (post.platform === "instagram") normalized = await normalizeInstagramPerformance(await getInstagramReelMetrics(post.postId));
+            else if (post.platform === "facebook") normalized = await normalizeFacebookPerformance(await getFacebookReelMetrics(post.postId));
+            else {
+              results.push({ platform: post.platform, postId: post.postId, metrics: {}, collectionError: "Unsupported platform" });
+              continue;
+            }
+            results.push(normalized);
+          } catch (error) {
+            results.push({ platform: post.platform, postId: post.postId, metrics: {}, collectionError: error instanceof Error ? error.message : String(error) });
+          }
+        }
+        const updated = { ...campaign, updatedAt: new Date().toISOString(), performance: results };
+        const filePath = await saveCampaign(updated);
+        return { content: [{ type: "text", text: JSON.stringify({ campaignId, performance: results, filePath }, null, 2) }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "キャンペーン実績の取得に失敗しました。";
         return { content: [{ type: "text", text: message }], isError: true };
       }
     }
