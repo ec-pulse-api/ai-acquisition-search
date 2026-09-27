@@ -151,7 +151,8 @@ function createServer(): McpServer {
         }
         const decision = decideNextCampaign({ analysis, performance: previousPerformance });
         const selected = decision.nextTests[0];
-        const prompt = videoPrompt ?? [selected?.concept, selected?.hook, decision.productionBrief.angle, decision.productionBrief.format, decision.productionBrief.cta].filter(Boolean).join(". ");
+        const brief = decision.productionBrief;
+         const prompt = videoPrompt ?? [selected?.concept, selected?.hook, brief?.angle, brief?.format, brief?.cta].filter(Boolean).join(". ");
         let video: unknown = null;
         let narration: unknown = null;
         let videoUrl: string | undefined;
