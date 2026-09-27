@@ -1,6 +1,8 @@
 import type { AcquisitionAnalysis, PageSnapshot } from "./types";
 import { buildAcquisitionPrompt } from "./prompts";
-import type { WebSearchResult } from "./search-web";\nimport type { SocialSignal } from "./social-search";\nimport type { ShopSignal } from "./shop-search";
+import type { WebSearchResult } from "./search-web";
+import type { SocialSignal } from "./social-search";
+import type { ShopSignal } from "./shop-search";
 
 function fallback(source: PageSnapshot, webResults: { query: string; results: WebSearchResult[] } = { query: "", results: [] }, socialSignals: SocialSignal[] = [], shopSignals: ShopSignal[] = []): AcquisitionAnalysis {
   const evidence=[source.productName,source.title,source.description,...source.headings].filter(Boolean).slice(0,8) as string[];
@@ -27,7 +29,9 @@ function fallback(source: PageSnapshot, webResults: { query: string; results: We
       {rank:2,concept:productName+"の比較型",hook:"似た商品を買う前に、この3つを比較してください。",format:"比較型短尺",channel:"TikTok / Instagram Reels",reason:"比較検討層の反応を検証するため",testMetric:"保存率・クリック率"},
       {rank:3,concept:productName+"の使用シーン型",hook:"実際に使うなら、この場面で違いが出ます。",format:"使用シーン紹介",channel:"TikTok / Instagram Reels",reason:"利用イメージの反応を検証するため",testMetric:"クリック率・購入率"}
     ],
-    socialSignals,\n    shopSignals,\n    searchEvidence:webResults.results.slice(0,10),aiConnected:false
+    socialSignals,
+    shopSignals,
+    searchEvidence:webResults.results.slice(0,10),aiConnected:false
   };
 }
 
