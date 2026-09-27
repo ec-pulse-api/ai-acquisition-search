@@ -132,6 +132,23 @@ function createServer(): McpServer {
           productCategory: source.productCategory
         });
         const analysis = await analyzePage(source, { query: search.queries.join(" / "), results: search.results }, socialSignals, shopSignals);
+        const previousCampaign = campaignId ? await loadCampaign(campaignId) : null;
+        const previousPerformance: any[] = [];
+        if (previousCampaign?.posts?.length) {
+          const { normalizeXPerformance, normalizeYouTubePerformance, normalizeTikTokPerformance, normalizeInstagramPerformance, normalizeFacebookPerformance } = await import("../lib/analytics/performance");
+          const { getXPostMetrics } = await import("../lib/social/x");
+          for (const post of previousCampaign.posts) {
+            try {
+              if (post.platform === "x") previousPerformance.push(await normalizeXPerformance(await getXPostMetrics(post.postId)));
+              else if (post.platform === "youtube") previousPerformance.push(await normalizeYouTubePerformance(await getYouTubeVideoStatus(post.postId)));
+              else if (post.platform === "tiktok") previousPerformance.push(await normalizeTikTokPerformance(await getTikTokVideoMetrics(post.postId)));
+              else if (post.platform === "instagram") previousPerformance.push(await normalizeInstagramPerformance(await getInstagramReelMetrics(post.postId)));
+              else if (post.platform === "facebook") previousPerformance.push(await normalizeFacebookPerformance(await getFacebookReelMetrics(post.postId)));
+            } catch (error) {
+              previousPerformance.push({ platform: post.platform, postId: post.postId, metrics: {}, collectionError: error instanceof Error ? error.message : String(error) });
+            }
+          }
+        }
         const decision = decideNextCampaign({ analysis, performance: previousPerformance });
         const selected = decision.nextTests[0];
         const prompt = videoPrompt ?? [selected?.concept, selected?.hook, decision.productionBrief.angle, decision.productionBrief.format, decision.productionBrief.cta].filter(Boolean).join(". ");
