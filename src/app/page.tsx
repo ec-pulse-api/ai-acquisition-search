@@ -36,6 +36,9 @@ export default function Home() {
   const [ecPulseLoading, setEcPulseLoading] = useState(false);
   const [testSaving, setTestSaving] = useState(false);
   const [testSaved, setTestSaved] = useState("");
+  const [metricsOpen, setMetricsOpen] = useState(false);
+  const [metrics, setMetrics] = useState({ impressions:"", views:"", clicks:"", conversions:"", revenue:"", grossProfit:"", adSpend:"" });
+  const [verdict, setVerdict] = useState<{verdict:string;reason:string}|null>(null);
   const [researchHistory, setResearchHistory] = useState<EcPulseResearchRun[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -121,6 +124,23 @@ export default function Home() {
     } finally {
       setTestSaving(false);
     }
+  }
+
+  async function saveMetrics() {
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (!supabaseUrl || !anonKey) throw new Error("Supabase設定がありません。");
+      const { createClient } = await import("@supabase/supabase-js");
+      const supabase = createClient(supabaseUrl, anonKey);
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) throw new Error("先にGoogleでログインしてください。");
+      const saved = await fetch("/api/operator/metrics", { method:"POST", headers:{"Content-Type":"application/json",Authorization:`Bearer ${data.session.access_token}`}, body:JSON.stringify(metrics) });
+      const body = await saved.json();
+      if (!saved.ok) throw new Error(body.error || "実績保存に失敗しました。");
+      const socialPostId = body.socialPostId || metrics.socialPostId;
+      if (!socialPostId) throw new Error("投稿IDがありません。まず投稿を登録してください。");
+    } catch(err) { setError(err instanceof Error ? err.message : "実績保存に失敗しました。"); }
   }
 
   async function generateNarration() {
@@ -457,6 +477,18 @@ export default function Home() {
               <List items={result.analysis.searchEvidence.map((item) => item.title + " — " + item.url + " — " + item.snippet)} />
             </Section>
           )}
+
+          <section className="next performance-loop">
+            <p className="eyebrow">PERFORMANCE LOOP</p>
+            <h2>投稿結果を入れて、次の判断へ</h2>
+            <p className="hint">投稿後の数字を保存すると、AIが継続・ピボット・停止の次アクションを判断します。</p>
+            <button type="button" onClick={()=>setMetricsOpen(!metricsOpen)}>{metricsOpen ? "入力を閉じる" : "実績を入力する"}</button>
+            {metricsOpen && <div className="metrics-form">
+              {(["impressions","views","clicks","conversions","revenue","grossProfit","adSpend"] as const).map(k=><label key={k}>{k}<input type="number" value={metrics[k]} onChange={e=>setMetrics({...metrics,[k]:e.target.value})}/></label>)}
+              <p className="hint">※ 判定には「投稿ID」が必要です。自動投稿機能と接続した投稿はIDを保持できます。</p>
+            </div>}
+            {verdict && <div className="verdict"><strong>{verdict.verdict}</strong><p>{verdict.reason}</p></div>}
+          </section>
 
           <section className="next test-loop">
             <p className="eyebrow">AD TEST LOOP</p>
