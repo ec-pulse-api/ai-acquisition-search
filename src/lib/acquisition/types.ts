@@ -87,5 +87,20 @@ export type EcPulseResearchRun = {
   comments_count: number;
   captured_at: string;
   top_pain?: { pain: string; count: number; share_percent: number } | null;
+  trend?: {
+    previous_run_id?: string | null;
+    previous_captured_at?: string | null;
+    signal?: string;
+    emerging_pains?: Array<{
+      pain: string;
+      count_delta: number;
+      share_delta_percent: number;
+      status: string;
+      current_count: number;
+      previous_count: number;
+      current_share_percent: number;
+      previous_share_percent: number;
+    }>;
+  };
 };
 
