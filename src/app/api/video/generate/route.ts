@@ -10,7 +10,7 @@ function hfCredentials() {
 }
 
 async function hfRequest(path: string, init: RequestInit) {
-  const response = await fetch(`https://api.higgsfield.ai/${path.replace(/^\\/+|\\/+$/g, "")}`, {
+  const response = await fetch(`https://api.higgsfield.ai/${path.replace(/^\/+|\/+$/g, "")}`, {
     ...init,
     headers: { Authorization: hfCredentials(), "Content-Type": "application/json", ...(init.headers ?? {}) }
   });
