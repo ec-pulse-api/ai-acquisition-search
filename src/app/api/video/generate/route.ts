@@ -1,10 +1,91 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import {
-  generateHiggsfieldVideo,
-  waitForHiggsfieldVideo
-} from "../../../../lib/video/higgsfield";
-import { saveVideoToStorage } from "../../../../lib/video/storage";
+const DEFAULT_MODEL = process.env.HF_VIDEO_MODEL ?? "alibaba/wan-3.0/text-to-video";
+
+function hfCredentials() {
+  const id = process.env.HF_API_KEY_ID;
+  const secret = process.env.HF_API_KEY_SECRET;
+  if (!id || !secret) throw new Error("Higgsfield API credentials are not configured.");
+  return `Key ${id}:${secret}`;
+}
+
+async function hfRequest(path: string, init: RequestInit) {
+  const response = await fetch(`https://api.higgsfield.ai/${path.replace(/^\\/+|\\/+$/g, "")}`, {
+    ...init,
+    headers: { Authorization: hfCredentials(), "Content-Type": "application/json", ...(init.headers ?? {}) }
+  });
+  const text = await response.text();
+  let data: any;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!response.ok) throw new Error(`Higgsfield API error ${response.status}: ${JSON.stringify(data)}`);
+  return data as Record<string, any>;
+}
+
+async function generateHiggsfieldVideo(input: {
+  prompt: string; model?: string; duration: number; resolution: string; aspectRatio: string; generateAudio: boolean;
+}) {
+  const model = input.model ?? DEFAULT_MODEL;
+  return hfRequest(model, {
+    method: "POST",
+    body: JSON.stringify({
+      prompt: input.prompt,
+      duration: input.duration,
+      resolution: input.resolution,
+      aspect_ratio: input.aspectRatio,
+      generate_audio: input.generateAudio,
+      enable_thinking: false
+    })
+  });
+}
+
+function extractVideoUrl(result: Record<string, any>) {
+  const direct = result.video?.url;
+  if (typeof direct === "string" && /^https?:/i.test(direct)) return direct;
+  for (const job of Array.isArray(result.jobs) ? result.jobs : []) {
+    const raw = job?.results?.raw;
+    if (typeof raw === "string" && /^https?:/i.test(raw)) return raw;
+    if (typeof raw?.url === "string" && /^https?:/i.test(raw.url)) return raw.url;
+  }
+  return undefined;
+}
+
+async function waitForHiggsfieldVideo(requestId: string, timeoutMs = 15 * 60_000) {
+  const started = Date.now();
+  let delay = 2000;
+  while (Date.now() - started < timeoutMs) {
+    const result = await hfRequest(`requests/${encodeURIComponent(requestId)}/status`, { method: "GET" });
+    const status = String(result.status ?? "");
+    if (status === "completed") {
+      const videoUrl = extractVideoUrl(result);
+      if (!videoUrl) throw new Error("Higgsfield completed but video URL was not returned.");
+      return { ...result, videoUrl };
+    }
+    if (status === "failed" || status === "nsfw") throw new Error(`Higgsfield generation ${status}`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+    delay = Math.min(Math.round(delay * 1.5), 10000);
+  }
+  throw new Error("Higgsfield generation timed out.");
+}
+
+async function saveVideoToStorage(input: { userId: string; jobId: string; sourceUrl: string }) {
+  const response = await fetch(input.sourceUrl);
+  if (!response.ok) throw new Error(`動画取得に失敗しました: HTTP ${response.status}`);
+  const contentType = response.headers.get("content-type") || "video/mp4";
+  const arrayBuffer = await response.arrayBuffer();
+  if (!arrayBuffer.byteLength) throw new Error("取得した動画ファイルが空です。");
+  const ext = contentType.includes("webm") ? "webm" : "mp4";
+  const path = `${input.userId}/${input.jobId}.${ext}`;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceRole) throw new Error("Supabase Storage is not configured.");
+  const supabase = createClient(url, serviceRole, { auth: { autoRefreshToken: false, persistSession: false } });
+  const { error } = await supabase.storage.from("video-assets").upload(path, arrayBuffer, {
+    contentType, upsert: true, cacheControl: "31536000"
+  });
+  if (error) throw new Error(`Supabase Storage upload failed: ${error.message}`);
+  const { data } = supabase.storage.from("video-assets").getPublicUrl(path);
+  return { bucket: "video-assets", path, url: data.publicUrl, bytes: arrayBuffer.byteLength, contentType };
+}
 
 export const runtime = "nodejs";
 export const maxDuration = 800;
