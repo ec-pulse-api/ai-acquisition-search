@@ -1,15 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
 const EC_PULSE_API_URL = (process.env.EC_PULSE_API_URL || "https://ec-pulse-rk8mola3m-naitoshyuichirou-6935.vercel.app").replace(/\/$/, "");
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const urls = Array.isArray(body?.urls)
-      ? [...new Set(body.urls.filter((item: unknown): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))].slice(0, 20)
-      : [];
+    const rawUrls = Array.isArray(body?.urls) ? body.urls : [];
+    const urls = Array.from(new Set(
+      rawUrls
+        .filter((value: unknown) => typeof value === "string")
+        .map((value: unknown) => String(value).trim())
+        .filter(Boolean)
+    )).slice(0, 20);
 
     if (!urls.length) {
       return NextResponse.json({ error: "リサーチ対象URLを1件以上入力してください。" }, { status: 400 });
