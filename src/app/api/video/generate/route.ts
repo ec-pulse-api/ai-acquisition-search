@@ -44,7 +44,8 @@ export async function POST(request: Request) {
     let creativeId: string | null = null;
     if (socialPostId) {
       const { data: post, error } = await admin.from("social_posts").select("id,creative_id").eq("id", socialPostId).eq("user_id", user.id).maybeSingle();
-      if (postErrorOr(post, error)) throw new Error(post ? error!.message : "指定されたsocial postが見つかりません。");
+      if (error) throw new Error(error.message);
+      if (!post) throw new Error("指定されたsocial postが見つかりません。");
       creativeId = post.creative_id;
     }
 
