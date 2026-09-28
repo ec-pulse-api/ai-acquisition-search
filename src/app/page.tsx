@@ -48,6 +48,10 @@ export default function Home() {
   const [videoJob, setVideoJob] = useState<any>(null);
   const [videoAsset, setVideoAsset] = useState<any>(null);
   const [videoError, setVideoError] = useState("");
+  const [publishPlatforms, setPublishPlatforms] = useState<string[]>(["tiktok", "instagram", "youtube", "linkedin"]);
+  const [publishCaption, setPublishCaption] = useState("");
+  const [publishing, setPublishing] = useState(false);
+  const [publishResult, setPublishResult] = useState<any>(null);
   const videoPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => () => {
@@ -124,6 +128,28 @@ export default function Home() {
   }
 
 
+
+  async function publishVideo() {
+    if (!videoAsset?.video_url || !socialPostId) return;
+    setPublishing(true);
+    setPublishResult(null);
+    try {
+      const token = await getAccessToken();
+      const caption = publishCaption.trim() || (result ? result.analysis.decision.valueProposition : "");
+      const res = await fetch("/api/social/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ socialPostId, videoUrl: videoAsset.video_url, caption, platforms: publishPlatforms }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "SNS投稿に失敗しました。");
+      setPublishResult(body);
+    } catch (err) {
+      setPublishResult({ ok: false, error: err instanceof Error ? err.message : "SNS投稿に失敗しました。" });
+    } finally {
+      setPublishing(false);
+    }
+  }
 
   async function analyze(e?: FormEvent) {
     e?.preventDefault();
@@ -639,6 +665,38 @@ export default function Home() {
                 </div>
                 <video controls playsInline src={videoAsset.video_url} />
                 <small>{videoAsset.resolution} · {videoAsset.aspect_ratio} · {videoAsset.duration}秒 · {videoAsset.provider}</small>
+              </div>
+            )}
+          </section>
+
+          <section className="next publisher-loop">
+            <p className="eyebrow">UNIFIED SNS PUBLISHER</p>
+            <h2>完成動画をSNSへ投稿</h2>
+            <p className="hint">完成したMP4を同じ広告テストに紐づけて、複数SNSへ一括投稿します。</p>
+            <div className="publisher-platforms">
+              {["tiktok","instagram","youtube","x","linkedin"].map((platform) => (
+                <label key={platform}>
+                  <input type="checkbox" checked={publishPlatforms.includes(platform)}
+                    onChange={(e) => setPublishPlatforms((current) => e.target.checked ? [...new Set([...current, platform])] : current.filter((item) => item !== platform))} />
+                  {platform}
+                </label>
+              ))}
+            </div>
+            <textarea value={publishCaption} onChange={(e) => setPublishCaption(e.target.value)} rows={4}
+              placeholder={result ? result.analysis.decision.valueProposition : "投稿本文"} />
+            <button type="button" onClick={publishVideo} disabled={!videoAsset?.video_url || !socialPostId || publishing || !publishPlatforms.length}>
+              {publishing ? "SNSへ投稿中..." : "選択したSNSへ一括投稿"}
+            </button>
+            {!videoAsset?.video_url && <p className="video-warning">先に広告動画を完成させてください。</p>}
+            {publishResult?.error && <p className="error">{publishResult.error}</p>}
+            {publishResult?.results && (
+              <div className="publish-results">
+                {publishResult.results.map((item: any) => (
+                  <div key={item.platform} className={item.ok ? "publish-row done" : "publish-row failed"}>
+                    <strong>{item.platform}</strong><span>{item.ok ? "投稿完了" : item.error}</span>
+                    {item.url && <a href={item.url} target="_blank" rel="noreferrer">開く →</a>}
+                  </div>
+                ))}
               </div>
             )}
           </section>
