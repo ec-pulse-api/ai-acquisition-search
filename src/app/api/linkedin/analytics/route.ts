@@ -34,9 +34,22 @@ export async function POST(request: Request) {
 
     const analytics = await getLinkedInMemberPostAnalytics(
       decryptLinkedInToken(account.access_token_encrypted),
-      postUrn,
+      resolvedPostUrn,
     );
-    return NextResponse.json({ ok: true, analytics });
+    const metric = Array.isArray((analytics as any)?.elements) ? ((analytics as any).elements[0]?.total || (analytics as any).elements[0] || {}) : ((analytics as any)?.total || (analytics as any) || {});
+    const num = (v: unknown) => typeof v === "number" ? v : Number(v || 0);
+    const impressions = num(metric.IMPRESSION ?? metric.impression);
+    const clicks = num(metric.LINK_CLICKS ?? metric.linkClicks);
+    const likes = num(metric.REACTION ?? metric.reaction);
+    const comments = num(metric.COMMENT ?? metric.comment);
+    const shares = num(metric.RESHARE ?? metric.reshare);
+    const saves = num(metric.POST_SAVE ?? metric.postSave);
+    if (linkedPostId) {
+      const ctr = impressions > 0 ? clicks / impressions : null;
+      const { error: metricError } = await supabase.from("post_metrics").insert({ social_post_id: linkedPostId, impressions, views: 0, likes, comments, shares, saves, clicks, conversions: 0, revenue: 0, gross_profit: 0, ad_spend: 0, ctr, cvr: null, cpa: null, roas: null, raw: { source: "linkedin", analytics } });
+      if (metricError) throw metricError;
+    }
+    return NextResponse.json({ ok: true, analytics, socialPostId: linkedPostId || null, normalized: { impressions, clicks, likes, comments, shares, saves } });
   } catch (error) {
     console.error("linkedin analytics error", error);
     return NextResponse.json({ error: error instanceof Error ? error.message : "LinkedIn分析に失敗しました。" }, { status: 500 });
