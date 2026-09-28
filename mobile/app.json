@@ -9,7 +9,10 @@
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.ecpulse.aiacquisitionsearch",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.ecpulse.aiacquisitionsearch",
@@ -17,12 +20,24 @@
         "backgroundColor": "#0b0b0c"
       }
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#080809",
+          "imageWidth": 180,
+          "resizeMode": "contain"
+        }
+      ]
+    ],
     "web": {
       "bundler": "metro"
     },
     "extra": {
       "webAppUrl": "https://ai-acquisition-search-naitoshyuichirou-6935.vercel.app"
-    }
+    },
+    "backgroundColor": "#080809",
+    "primaryColor": "#080809"
   }
 }
