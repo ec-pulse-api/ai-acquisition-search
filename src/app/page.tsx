@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import GoogleSignIn from "@/components/GoogleSignIn";
 import BillingButton from "@/components/BillingButton";
 import LinkedInConnect from "@/components/LinkedInConnect";
@@ -43,6 +43,86 @@ export default function Home() {
   const [socialPostId, setSocialPostId] = useState("");
   const [researchHistory, setResearchHistory] = useState<EcPulseResearchRun[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [videoPrompt, setVideoPrompt] = useState("");
+  const [videoGenerating, setVideoGenerating] = useState(false);
+  const [videoJob, setVideoJob] = useState<any>(null);
+  const [videoAsset, setVideoAsset] = useState<any>(null);
+  const [videoError, setVideoError] = useState("");
+  const videoPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => () => {
+    if (videoPollRef.current) clearInterval(videoPollRef.current);
+  }, []);
+
+  async function getAccessToken() {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !anonKey) throw new Error("Supabase設定がありません。");
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabase = createClient(supabaseUrl, anonKey);
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) throw new Error("先にGoogleでログインしてください。");
+    return data.session.access_token;
+  }
+
+  async function pollVideoJob(jobId: string) {
+    try {
+      const token = await getAccessToken();
+      const res = await fetch(`/api/video/jobs/${jobId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "動画ジョブの確認に失敗しました。");
+      setVideoJob(body.job);
+      if (body.asset) setVideoAsset(body.asset);
+      if (body.job.status === "completed" || body.job.status === "failed") {
+        if (videoPollRef.current) clearInterval(videoPollRef.current);
+        videoPollRef.current = null;
+        setVideoGenerating(false);
+        if (body.job.status === "failed") setVideoError(body.job.error || "動画生成に失敗しました。");
+      }
+    } catch (err) {
+      setVideoGenerating(false);
+      if (videoPollRef.current) clearInterval(videoPollRef.current);
+      videoPollRef.current = null;
+      setVideoError(err instanceof Error ? err.message : "動画ジョブの確認に失敗しました。");
+    }
+  }
+
+  async function generateVideo() {
+    setVideoGenerating(true);
+    setVideoError("");
+    setVideoAsset(null);
+    setVideoJob(null);
+    if (videoPollRef.current) clearInterval(videoPollRef.current);
+    try {
+      const token = await getAccessToken();
+      const prompt = videoPrompt.trim() || narrationText.trim();
+      if (!prompt) throw new Error("動画プロンプトまたはナレーション本文を入力してください。");
+      const res = await fetch("/api/video/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          prompt,
+          socialPostId: socialPostId || undefined,
+          duration: 5,
+          resolution: "1080p",
+          aspectRatio: "9:16",
+          generateAudio: false,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "動画生成の開始に失敗しました。");
+      setVideoJob(body);
+      await pollVideoJob(body.jobId);
+      videoPollRef.current = setInterval(() => pollVideoJob(body.jobId), 8000);
+    } catch (err) {
+      setVideoGenerating(false);
+      setVideoError(err instanceof Error ? err.message : "動画生成の開始に失敗しました。");
+    }
+  }
+
 
 
   async function analyze(e?: FormEvent) {
@@ -529,6 +609,38 @@ export default function Home() {
               {testSaving ? "保存中..." : "このテスト計画を保存"}
             </button>
             {testSaved && <p className="success">{testSaved}</p>}
+          </section>
+
+          <section className="next video-engine">
+            <p className="eyebrow">VIDEO ENGINE · HIGGSFIELD</p>
+            <h2>広告動画を生成する</h2>
+            <p className="hint">広告テストの訴求をそのまま動画生成Jobに送り、完成したMP4を永続保存します。ログイン後に実行できます。</p>
+            {!socialPostId && <p className="video-warning">先に「このテスト計画を保存」すると、動画と広告テストを紐づけられます。</p>}
+            <textarea
+              value={videoPrompt}
+              onChange={(e) => setVideoPrompt(e.target.value)}
+              rows={6}
+              placeholder={result ? `例：${result.analysis.decision.valueProposition}を訴求。最初の3秒で悩みを提示し、自然なUGC広告として見せる。` : "動画生成プロンプト"}
+              style={{ width: "100%", marginBottom: 12 }}
+            />
+            <div className="video-actions">
+              <button type="button" onClick={generateVideo} disabled={videoGenerating || !socialPostId}>
+                {videoGenerating ? "動画生成中..." : "広告動画を生成"}
+              </button>
+              {videoJob?.status && <span className={videoJob.status === "completed" ? "video-status done" : videoJob.status === "failed" ? "video-status failed" : "video-status"}>{videoJob.status.toUpperCase()}</span>}
+            </div>
+            {videoError && <p className="error">{videoError}</p>}
+            {videoJob?.requestId && <p className="hint">Job: {videoJob.jobId} · Higgsfield request: {videoJob.requestId}</p>}
+            {videoAsset?.video_url && (
+              <div className="video-result">
+                <div className="video-result-head">
+                  <strong>MP4完成</strong>
+                  <a href={videoAsset.video_url} target="_blank" rel="noreferrer">動画を開く →</a>
+                </div>
+                <video controls playsInline src={videoAsset.video_url} />
+                <small>{videoAsset.resolution} · {videoAsset.aspect_ratio} · {videoAsset.duration}秒 · {videoAsset.provider}</small>
+              </div>
+            )}
           </section>
 
           <section className="next">
