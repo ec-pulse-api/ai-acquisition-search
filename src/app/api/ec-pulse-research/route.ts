@@ -78,12 +78,12 @@ export async function POST(request: NextRequest) {
       const data = await response.json().catch(() => null);
       for (const item of data?.results ?? []) {
         products.push({
-          title: item.title ?? item.product?.title ?? "",
-          url: item.url ?? item.source?.url ?? "",
-          price: item.price ?? item.pricing?.price ?? null,
-          currency: item.currency ?? item.pricing?.currency ?? "",
-          marketplace: item.marketplace ?? item.source?.marketplace ?? null,
-          product_id: item.product_id ?? item.source?.product_id ?? null,
+          title: item.title ?? item.product?.product?.title ?? item.product?.title ?? "",
+          url: item.url ?? item.product?.source?.url ?? item.source?.url ?? "",
+          price: item.price ?? item.product?.pricing?.price ?? item.pricing?.price ?? null,
+          currency: item.currency ?? item.product?.pricing?.currency ?? item.pricing?.currency ?? "",
+          marketplace: item.marketplace ?? item.product?.source?.marketplace ?? item.source?.marketplace ?? null,
+          product_id: item.product_id ?? item.product?.source?.product_id ?? item.source?.product_id ?? null,
           query
         });
       }
