@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import GoogleSignIn from "@/components/GoogleSignIn";
 import BillingButton from "@/components/BillingButton";
-import type { AcquisitionAnalyzeResult, EcPulseResearchBundle } from "@/lib/acquisition/types";
+import type { AcquisitionAnalyzeResult, EcPulseResearchBundle, EcPulseResearchRun } from "@/lib/acquisition/types";
 
 function List({ items }: { items: string[] }) {
   return (
@@ -36,6 +36,8 @@ export default function Home() {
   const [ecPulseLoading, setEcPulseLoading] = useState(false);
   const [testSaving, setTestSaving] = useState(false);
   const [testSaved, setTestSaved] = useState("");
+  const [researchHistory, setResearchHistory] = useState<EcPulseResearchRun[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
 
   async function analyze(e?: FormEvent) {
@@ -68,6 +70,19 @@ export default function Home() {
         setEcPulse({ connected: false, research: null, products: [], error: "EC Pulseリサーチに接続できませんでした。" });
       } finally {
         setEcPulseLoading(false);
+      }
+
+      setHistoryLoading(true);
+      try {
+        const historyResponse = await fetch("/api/ec-pulse-research/history?url=" + encodeURIComponent(url) + "&limit=8", {
+          cache: "no-store"
+        });
+        const historyData = await historyResponse.json().catch(() => ({}));
+        setResearchHistory(historyData.runs || []);
+      } catch {
+        setResearchHistory([]);
+      } finally {
+        setHistoryLoading(false);
       }
       const decision = data.data.analysis.decision;
       setNarrationText(
@@ -262,6 +277,38 @@ export default function Home() {
                 </article>
               </div>
             )}
+          </section>
+
+          <section className="research-history">
+            <div className="research-head">
+              <div>
+                <p className="eyebrow">RESEARCH HISTORY</p>
+                <h2>調査を蓄積して、変化を見る</h2>
+                <p>同じ商品を再調査するたびに、前回の痛点と比較できるように履歴を残します。</p>
+              </div>
+              <span className="history-count">{historyLoading ? "LOADING" : `${researchHistory.length} RUNS`}</span>
+            </div>
+            {researchHistory.length > 0 ? (
+              <div className="history-list">
+                {researchHistory.map((run, index) => (
+                  <article className="history-row" key={run.run_id}>
+                    <div className="history-index">{String(researchHistory.length - index).padStart(2, "0")}</div>
+                    <div>
+                      <strong>{new Date(run.captured_at).toLocaleString("ja-JP")}</strong>
+                      <small>{run.comments_count}件のコメント · {run.market || "GLOBAL"} · {run.source_type || "research"}</small>
+                    </div>
+                    <div className="history-pain">
+                      {run.top_pain ? <><span>TOP PAIN</span><strong>{run.top_pain.pain}</strong><small>{run.top_pain.count}件 / {run.top_pain.share_percent}%</small></> : <span>痛点データなし</span>}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : !historyLoading ? (
+              <div className="history-empty">
+                <strong>まだ比較できる履歴はありません。</strong>
+                <span>この商品をもう一度調査すると、痛点の増減を追えるようになります。</span>
+              </div>
+            ) : null}
           </section>
 
           <Section title="01 商品分析">
