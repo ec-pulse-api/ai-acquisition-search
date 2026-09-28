@@ -28,4 +28,4 @@ npx eas build --platform ios --profile preview
 
 ## Branding
 
-`assets/brand.svg` is the source artwork for the final 1024×1024 PNG app icon and splash image. Expo's production app icon/splash configuration expects PNG assets for these image files.
+`assets/brand.svg` is the source artwork. GitHub Actions generates the required `assets/icon.png` and `assets/splash-icon.png` files on pushes to `main`.
