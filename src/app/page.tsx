@@ -31,7 +31,7 @@ export default function Home() {
   const [narrationAudio, setNarrationAudio] = useState("");
   const [narrationLoading, setNarrationLoading] = useState(false);
   const [ecPulse, setEcPulse] = useState<EcPulseResearchBundle | null>(null);
-  const [ecPulseLoading, setEcPulseLoading] = useState(false);
+  const [ecPulseLoading, setEcPulseLoading] = useState(false);\n  const [batchUrls, setBatchUrls] = useState("");\n  const [batchResult, setBatchResult] = useState<any>(null);\n  const [batchLoading, setBatchLoading] = useState(false);
 
   async function analyze(e?: FormEvent) {
     e?.preventDefault();
@@ -73,6 +73,28 @@ export default function Home() {
       setError(err instanceof Error ? err.message : "分析に失敗しました。");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function runBatchResearch() {
+    const urls = [...new Set(batchUrls.split(/[\\n,]+/).map((item) => item.trim()).filter(Boolean))].slice(0, 20);
+    if (!urls.length) return;
+    setBatchLoading(true);
+    setBatchResult(null);
+    setError("");
+    try {
+      const res = await fetch("/api/ec-pulse-research-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "一括リサーチに失敗しました。");
+      setBatchResult(data);
+    } catch (err) {
+      setBatchResult({ connected: false, results: [], error: err instanceof Error ? err.message : "一括リサーチに失敗しました。" });
+    } finally {
+      setBatchLoading(false);
     }
   }
 
@@ -224,6 +246,57 @@ export default function Home() {
               </div>
             )}
           </section>
+
+          {batchResult && (
+            <section className="research-flow batch-results">
+              <div className="research-head">
+                <div>
+                  <p className="eyebrow">CROSS-SOURCE SIGNALS</p>
+                  <h2>複数ソース横断の痛点シグナル</h2>
+                </div>
+                <span className={batchResult.connected ? "pulse-on" : "pulse-off"}>
+                  {batchResult.connected ? "BATCH CONNECTED" : "BATCH ERROR"}
+                </span>
+              </div>
+              {batchResult.error && <div className="research-error">{batchResult.error}</div>}
+              {batchResult.summary && (
+                <div className="research-grid">
+                  <article className="research-card">
+                    <p className="eyebrow">SUMMARY</p>
+                    <h3>横断集計</h3>
+                    <p>URL {batchResult.summary.urls_analyzed ?? 0}件 · コメント {batchResult.summary.comments_analyzed ?? 0}件</p>
+                    {(batchResult.summary.top_pains || []).slice(0, 8).map((pain: any, index: number) => (
+                      <div className="pain-row" key={pain.pain || index}>
+                        <div><strong>{pain.pain}</strong><small>{pain.count}件</small></div>
+                        <span>{pain.sources ?? 0}ソース</span>
+                      </div>
+                    ))}
+                  </article>
+                  <article className="research-card">
+                    <p className="eyebrow">RISING PAINS</p>
+                    <h3>上昇している痛点</h3>
+                    {(batchResult.summary.rising_pains || []).slice(0, 8).map((pain: any, index: number) => (
+                      <div className="angle" key={pain.pain || index}>
+                        <strong>{pain.pain}</strong>
+                        <small>件数差 {pain.count_delta > 0 ? "+" : ""}{pain.count_delta} · シェア差 {pain.share_delta_percent > 0 ? "+" : ""}{pain.share_delta_percent}%</small>
+                      </div>
+                    ))}
+                    {!batchResult.summary.rising_pains?.length && <p className="muted">今回の比較では上昇痛点はまだ検出されていません。</p>}
+                  </article>
+                  <article className="research-card">
+                    <p className="eyebrow">SOURCE MIX</p>
+                    <h3>市場・ソース構成</h3>
+                    {Object.entries(batchResult.summary.source_counts || {}).map(([source, count]) => (
+                      <p key={source}><strong>{source}</strong> · {String(count)}件</p>
+                    ))}
+                    {Object.entries(batchResult.summary.market_counts || {}).map(([market, count]) => (
+                      <p key={market}><strong>{market}</strong> · {String(count)}件</p>
+                    ))}
+                  </article>
+                </div>
+              )}
+            </section>
+          )}
 
           <Section title="01 商品分析">
             <h2>{result.analysis.product.summary}</h2>
