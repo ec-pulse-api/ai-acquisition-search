@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "AI Acquisition Search",
+    "slug": "ai-acquisition-search",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "aiacquisitionsearch",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "com.ecpulse.aiacquisitionsearch",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.ecpulse.aiacquisitionsearch",
+      "adaptiveIcon": {
+        "backgroundColor": "#0b0b0c"
+      }
+    },
+    "plugins": ["expo-router"],
+    "web": {
+      "bundler": "metro"
+    },
+    "extra": {
+      "webAppUrl": "https://ai-acquisition-search-naitoshyuichirou-6935.vercel.app"
+    }
+  }
+}
