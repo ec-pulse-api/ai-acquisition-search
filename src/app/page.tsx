@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import GoogleSignIn from "@/components/GoogleSignIn";
+import BillingButton from "@/components/BillingButton";
 import type { AcquisitionAnalyzeResult, EcPulseResearchBundle } from "@/lib/acquisition/types";
 
 function List({ items }: { items: string[] }) {
@@ -416,11 +417,11 @@ export default function Home() {
           </article>
           <article>
             <b>PRO</b>
-            <div><strong>広告運用を回す</strong><p>継続的なテスト、クリエイティブ生成、結果学習を想定。</p><small>Stripe決済を接続すると申込可能</small></div>
+            <div><strong>広告運用を回す</strong><p>継続的なテスト、クリエイティブ生成、結果学習を想定。</p><small>月額4,980円（税込）</small><div style={{ marginTop: 10 }}><BillingButton /></div></div>
           </article>
           <article>
             <b>AGENCY</b>
-            <div><strong>複数商品を運用</strong><p>複数商品の運用・チーム利用向け。</p><small>Stripe接続後に提供</small></div>
+            <div><strong>複数商品を運用</strong><p>複数商品の運用・チーム利用向け。</p><small>複数商品・チーム運用向け（順次提供）</small></div>
           </article>
         </div>
       </section>
