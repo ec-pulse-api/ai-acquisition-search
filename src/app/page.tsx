@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import type { AcquisitionAnalyzeResult } from "@/lib/acquisition/types";
+import type { AcquisitionAnalyzeResult, EcPulseResearchBundle } from "@/lib/acquisition/types";
 
 function List({ items }: { items: string[] }) {
   return (
@@ -30,6 +30,8 @@ export default function Home() {
   const [narrationText, setNarrationText] = useState("");
   const [narrationAudio, setNarrationAudio] = useState("");
   const [narrationLoading, setNarrationLoading] = useState(false);
+  const [ecPulse, setEcPulse] = useState<EcPulseResearchBundle | null>(null);
+  const [ecPulseLoading, setEcPulseLoading] = useState(false);
 
   async function analyze(e?: FormEvent) {
     e?.preventDefault();
@@ -47,6 +49,21 @@ export default function Home() {
       if (!res.ok) throw new Error(data.error || "分析に失敗しました。");
 
       setResult(data.data);
+      setEcPulse(null);
+      setEcPulseLoading(true);
+      try {
+        const researchRes = await fetch("/api/ec-pulse-research", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        const researchData = await researchRes.json();
+        setEcPulse(researchData);
+      } catch {
+        setEcPulse({ connected: false, research: null, products: [], error: "EC Pulseリサーチに接続できませんでした。" });
+      } finally {
+        setEcPulseLoading(false);
+      }
       const decision = data.data.analysis.decision;
       setNarrationText(
         `${decision.target}に向けて、${decision.problem}。だからこそ、${decision.valueProposition}。まずは${decision.channel}で${decision.format}を試してみましょう。`
@@ -132,6 +149,63 @@ export default function Home() {
             </a>
             <small>{result.source.url}</small>
           </div>
+
+          <section className="research-flow">
+            <div className="research-head">
+              <div>
+                <p className="eyebrow">EC PULSE RESEARCH LOOP</p>
+                <h2>市場リサーチ → 痛点 → 商品候補 → 広告訴求</h2>
+                <p>公開レビューを集計し、頻出する顧客痛点から商品候補と広告テスト案までつなげます。</p>
+              </div>
+              <span className={ecPulse?.connected ? "pulse-on" : "pulse-off"}>
+                {ecPulseLoading ? "RESEARCHING" : ecPulse?.connected ? "EC PULSE CONNECTED" : "NOT CONNECTED"}
+              </span>
+            </div>
+            {ecPulseLoading && <div className="research-loading">公開コメントを収集 → 痛点を集計 → 商品候補を検索中…</div>}
+            {!ecPulseLoading && ecPulse?.error && <div className="research-error">{ecPulse.error}</div>}
+            {!ecPulseLoading && ecPulse?.research?.analysis && (
+              <div className="research-grid">
+                <article className="research-card">
+                  <p className="eyebrow">01 PAIN POINTS</p>
+                  <h3>頻出する顧客の痛み</h3>
+                  <div className="pain-list">
+                    {ecPulse.research.analysis.pain_points.slice(0, 5).map((pain) => (
+                      <div key={pain.pain} className="pain-row">
+                        <div><strong>{pain.pain}</strong><small>{pain.count}件 · {pain.share_percent}%</small></div>
+                        <span>{pain.examples?.[0] || "レビュー例なし"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+                <article className="research-card">
+                  <p className="eyebrow">02 AD ANGLES</p>
+                  <h3>広告で検証する訴求</h3>
+                  <div className="angle">
+                    <strong>{ecPulse.research.analysis.recommended_angle || "頻出痛点を訴求軸として検証"}</strong>
+                    <ul>
+                      {(ecPulse.research.analysis.ad_copy_candidates || []).slice(0, 4).map((copy, index) => <li key={index}>{copy}</li>)}
+                    </ul>
+                  </div>
+                </article>
+                <article className="research-card candidates">
+                  <p className="eyebrow">03 PRODUCT CANDIDATES</p>
+                  <h3>痛点から探した商品候補</h3>
+                  {ecPulse.products.length ? ecPulse.products.slice(0, 8).map((product, index) => (
+                    <div className="candidate" key={product.url || product.title || String(index)}>
+                      <div><strong>{product.title || "商品候補"}</strong><small>{product.marketplace || "market"} · {product.price ?? "-"} {product.currency || ""}</small></div>
+                      {product.url && <a href={product.url} target="_blank" rel="noreferrer">見る →</a>}
+                    </div>
+                  )) : <p className="muted">痛点に紐づく商品候補を取得できませんでした。</p>}
+                </article>
+                <article className="research-card">
+                  <p className="eyebrow">04 NEXT TEST</p>
+                  <h3>次の広告テスト</h3>
+                  <p className="test-copy">「{ecPulse.research.analysis.recommended_angle || "最頻出の顧客痛点"}」を主訴求にして、短尺動画・静止画の2パターンを作成。クリック率と購入率で比較します。</p>
+                  {ecPulse.research.analysis.next_action && <small>{ecPulse.research.analysis.next_action}</small>}
+                </article>
+              </div>
+            )}
+          </section>
 
           <Section title="01 商品分析">
             <h2>{result.analysis.product.summary}</h2>
