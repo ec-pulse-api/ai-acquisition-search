@@ -32,6 +32,8 @@ export default function Home() {
   const [narrationLoading, setNarrationLoading] = useState(false);
   const [ecPulse, setEcPulse] = useState<EcPulseResearchBundle | null>(null);
   const [ecPulseLoading, setEcPulseLoading] = useState(false);
+  const [scenarioLoading, setScenarioLoading] = useState<number | null>(null);
+  const [scenario, setScenario] = useState<any>(null);
 
   async function analyze(e?: FormEvent) {
     e?.preventDefault();
@@ -73,6 +75,25 @@ export default function Home() {
       setError(err instanceof Error ? err.message : "分析に失敗しました。");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function generateScenario(rank: number) {
+    setScenarioLoading(rank);
+    setError("");
+    try {
+      const res = await fetch("/api/scenarios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ analysis: result?.analysis, rank }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "動画シナリオ生成に失敗しました。");
+      setScenario(data.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "動画シナリオ生成に失敗しました。");
+    } finally {
+      setScenarioLoading(null);
     }
   }
 
@@ -316,6 +337,32 @@ export default function Home() {
               ))}
             </div>
           </section>
+
+          {scenario && (
+            <section className="next">
+              <p className="eyebrow">VIDEO SCENARIO</p>
+              <h2>{scenario.title}</h2>
+              <p><strong>Hook:</strong> {scenario.hook}</p>
+              <p><strong>対象:</strong> {scenario.target}</p>
+              <p><strong>訴求:</strong> {scenario.angle}</p>
+              <p><strong>尺:</strong> {scenario.durationSec}秒 · <strong>検証:</strong> {scenario.objective}</p>
+              <div className="action-list">
+                {scenario.scenes.map((scene: any) => (
+                  <article key={scene.startSec}>
+                    <b>{scene.startSec}-{scene.endSec}s</b>
+                    <div>
+                      <strong>{scene.purpose}</strong>
+                      <p>{scene.visual}</p>
+                      <p><b>VOICE</b> {scene.narration}</p>
+                      <small>TEXT: {scene.onScreenText}</small>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <p><strong>CTA:</strong> {scenario.cta}</p>
+              <p><strong>Caption:</strong> {scenario.caption}</p>
+            </section>
+          )}
 
           <Section title="集客課題"><List items={result.analysis.acquisitionProblems} /></Section>
           <Section title="集客機会"><List items={result.analysis.opportunities} /></Section>
