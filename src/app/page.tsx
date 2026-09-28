@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import type { AcquisitionAnalyzeResult } from "@/lib/acquisition/types";
+import GoogleSignIn from "@/components/GoogleSignIn";
 
 function List({ items }: { items: string[] }) {
   return (
@@ -90,7 +91,10 @@ export default function Home() {
           <strong>AI Acquisition Search</strong>
           <span>AI集客検索エンジン</span>
         </div>
-        <span className="status">Customer Acquisition Intelligence</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <span className="status">Customer Acquisition Intelligence</span>
+          <GoogleSignIn />
+        </div>
       </header>
 
       <section className="hero">
