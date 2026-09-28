@@ -1,0 +1,78 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+export default function LinkedInConnect() {
+  const [connected, setConnected] = useState(false);
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [posting, setPosting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [commentary, setCommentary] = useState("");
+
+  async function getToken() {
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token || "";
+  }
+
+  async function refresh() {
+    const token = await getToken();
+    if (!token) { setLoading(false); return; }
+    const response = await fetch("/api/linkedin/status", { headers: { Authorization: "Bearer " + token }, cache: "no-store" });
+    const data = await response.json();
+    setConnected(Boolean(data.connected));
+    setName(data.account?.name || "");
+    setLoading(false);
+  }
+
+  useEffect(() => { void refresh(); }, []);
+
+  async function connect() {
+    setMessage("");
+    const token = await getToken();
+    if (!token) { setMessage("先にGoogleでログインしてください。"); return; }
+    const response = await fetch("/api/linkedin/connect", { headers: { Authorization: "Bearer " + token } });
+    const data = await response.json();
+    if (!response.ok) { setMessage(data.error || "LinkedIn接続を開始できません。"); return; }
+    window.location.href = data.url;
+  }
+
+  async function post() {
+    setPosting(true); setMessage("");
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("先にGoogleでログインしてください。");
+      const response = await fetch("/api/linkedin/post", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ commentary }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "LinkedIn投稿に失敗しました。");
+      setMessage("LinkedInへ投稿しました。ID: " + (data.post?.id || "取得済み"));
+      setCommentary("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "LinkedIn投稿に失敗しました。");
+    } finally { setPosting(false); }
+  }
+
+  if (loading) return null;
+  return (
+    <section className="social-connect panel">
+      <div>
+        <p className="eyebrow">LINKEDIN</p>
+        <h3>{connected ? "LinkedIn接続済み" + (name ? " · " + name : "") : "LinkedInを広告テスト先に追加"}</h3>
+        <p className="muted">AIが決めた次の訴求をLinkedInへ投稿し、テスト結果を次の判断へ戻します。</p>
+      </div>
+      {!connected ? <button onClick={connect}>LinkedInを接続</button> : (
+        <div className="social-post-box">
+          <textarea value={commentary} onChange={(e) => setCommentary(e.target.value)} placeholder="LinkedIn投稿本文…" rows={4} />
+          <button onClick={post} disabled={posting || !commentary.trim()}>{posting ? "投稿中…" : "LinkedInへ投稿"}</button>
+        </div>
+      )}
+      {message && <p className="muted">{message}</p>}
+    </section>
+  );
+}
