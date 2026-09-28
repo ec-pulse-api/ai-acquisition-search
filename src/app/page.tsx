@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import GoogleSignIn from "@/components/GoogleSignIn";
 import BillingButton from "@/components/BillingButton";
+import LinkedInConnect from "@/components/LinkedInConnect";
 import type { AcquisitionAnalyzeResult, EcPulseResearchBundle, EcPulseResearchRun } from "@/lib/acquisition/types";
 
 function List({ items }: { items: string[] }) {
@@ -221,6 +222,8 @@ export default function Home() {
         </div>
         <p className="hint">まずは商品URLを入力。調査結果は履歴として蓄積し、再調査で変化を追えます。</p>
       </section>
+
+      <LinkedInConnect />
 
       {result && (
         <div className="results">
