@@ -328,6 +328,23 @@ export default function Home() {
                     <div className="history-pain">
                       {run.top_pain ? <><span>TOP PAIN</span><strong>{run.top_pain.pain}</strong><small>{run.top_pain.count}件 / {run.top_pain.share_percent}%</small></> : <span>痛点データなし</span>}
                     </div>
+                    <div className="history-trend">
+                      {run.trend?.emerging_pains?.[0] ? (() => {
+                        const pain = run.trend.emerging_pains[0];
+                        const delta = pain.share_delta_percent;
+                        return (
+                          <>
+                            <span className={pain.status === "new" ? "trend-new" : "trend-rising"}>{pain.status === "new" ? "NEW" : "RISING"}</span>
+                            <strong>{pain.pain}</strong>
+                            <small>{delta >= 0 ? "+" : ""}{delta}pt · {pain.current_share_percent}%</small>
+                          </>
+                        );
+                      })() : run.trend?.signal === "no_previous_run" ? (
+                        <><span className="trend-neutral">BASELINE</span><small>次回調査から変化を比較</small></>
+                      ) : (
+                        <><span className="trend-neutral">STABLE</span><small>大きな上昇シグナルなし</small></>
+                      )}
+                    </div>
                   </article>
                 ))}
               </div>
