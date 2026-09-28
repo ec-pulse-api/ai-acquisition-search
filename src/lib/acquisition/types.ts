@@ -54,10 +54,20 @@ export type EcPulseResearch = {
   };
 };
 
+export type EcPulseOpportunity = {
+  run_id: string;
+  top_pain?: { pain: string; count: number; share_percent: number } | null;
+  emerging_pains?: Array<{ pain: string; count_delta: number; share_delta_percent: number; status: string }>;
+  product_directions?: Array<{ pain: string; product_direction: string; validation: string[] }>;
+  ad_test_angles?: Array<{ pain: string; hook: string; proof: string }>;
+  next_actions?: string[];
+};
+
 export type EcPulseResearchBundle = {
   connected: boolean;
   research: EcPulseResearch | null;
   products: EcPulseProduct[];
+  opportunity?: EcPulseOpportunity | null;
   error?: string;
 };
 
