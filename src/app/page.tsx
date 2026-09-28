@@ -164,12 +164,12 @@ export default function Home() {
       <section className="hero">
         <p className="eyebrow">AI CUSTOMER ACQUISITION</p>
         <h1>
-          商品URLを入れるだけで、
+          市場の声から、
           <br />
-          <span>次に試す広告を決める。</span>
+          <span>次の商品と広告を決める。</span>
         </h1>
         <p className="lead">
-          分析で終わらず、誰に・何を・どこで訴求するかを決め、次のクリエイティブテストまでつなげます。
+          商品URLから市場・レビュー・顧客の痛点を調査。頻出する不満から商品候補と広告訴求を作り、次のテストまでつなげます。
         </p>
 
         <form onSubmit={analyze} className="search">
@@ -187,11 +187,14 @@ export default function Home() {
 
         {error && <p className="error">{error}</p>}
         <div className="hero-proof">
-          <div><b>01</b><strong>顧客・市場を分析</strong><span>誰に何が刺さるかを整理</span></div>
-          <div><b>02</b><strong>次の広告を決定</strong><span>Hook・訴求・媒体を優先順位化</span></div>
-          <div><b>03</b><strong>結果から次を改善</strong><span>CTR・CVR・CPAを次のテストへ</span></div>
+          <div><b>01</b><strong>市場を調査</strong><span>レビュー・コメントから顧客の声を集計</span></div>
+          <div><b>02</b><strong>痛点から商品を探す</strong><span>頻出する不満を商品候補と設計方向へ</span></div>
+          <div><b>03</b><strong>広告をテストする</strong><span>痛点をHookに変えて次の検証へ</span></div>
         </div>
-        <p className="hint">まずは無料で分析。ログインすると広告テスト仮説を保存できます。</p>
+        <div className="hero-loop">
+          <span>RESEARCH</span><i>→</i><span>PAIN POINT</span><i>→</i><span>PRODUCT</span><i>→</i><span>AD TEST</span><i>→</i><span>LEARN</span>
+        </div>
+        <p className="hint">まずは商品URLを入力。調査結果は履歴として蓄積し、再調査で変化を追えます。</p>
       </section>
 
       {result && (
