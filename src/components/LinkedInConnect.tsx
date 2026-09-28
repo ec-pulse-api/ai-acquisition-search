@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from "react";
 
-export default function LinkedInConnect() {
+export default function LinkedInConnect({ socialPostId }: { socialPostId?: string }) {
   const [connected, setConnected] = useState(false);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
   const [message, setMessage] = useState("");
   const [commentary, setCommentary] = useState("");
+  const [postUrn, setPostUrn] = useState("");
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   async function getToken() {
     const { createClient } = await import("@supabase/supabase-js");
@@ -47,10 +49,11 @@ export default function LinkedInConnect() {
       const response = await fetch("/api/linkedin/post", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-        body: JSON.stringify({ commentary }),
+        body: JSON.stringify({ commentary, socialPostId }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "LinkedIn投稿に失敗しました。");
+      setPostUrn(data.post?.id || "");
       setMessage("LinkedInへ投稿しました。ID: " + (data.post?.id || "取得済み"));
       setCommentary("");
     } catch (error) {
@@ -69,7 +72,9 @@ export default function LinkedInConnect() {
       {!connected ? <button onClick={connect}>LinkedInを接続</button> : (
         <div className="social-post-box">
           <textarea value={commentary} onChange={(e) => setCommentary(e.target.value)} placeholder="LinkedIn投稿本文…" rows={4} />
-          <button onClick={post} disabled={posting || !commentary.trim()}>{posting ? "投稿中…" : "LinkedInへ投稿"}</button>
+          <button onClick={post} disabled={posting || !commentary.trim() || !socialPostId}>{posting ? "投稿中…" : "LinkedInへ投稿"}</button>
+          {postUrn && <button onClick={async () => { setAnalyticsLoading(true); setMessage(""); try { const token = await getToken(); const response = await fetch("/api/linkedin/analytics", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ socialPostId, postUrn }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "LinkedIn実績取得に失敗しました。"); setMessage("LinkedIn実績を取得し、テスト結果へ保存しました。"); } catch (e) { setMessage(e instanceof Error ? e.message : "LinkedIn実績取得に失敗しました。"); } finally { setAnalyticsLoading(false); } }} disabled={analyticsLoading}>{analyticsLoading ? "取得中…" : "LinkedIn実績を取得"}</button>}
+          {!socialPostId && <p className="hint">先に「このテスト計画を保存」するとLinkedIn投稿と実績取得を使えます。</p>}
         </div>
       )}
       {message && <p className="muted">{message}</p>}
