@@ -22,4 +22,47 @@ export type AcquisitionAnalysis = {
   aiConnected: boolean;
 };
 export type PageSnapshot = { url: string; title: string; description: string; headings: string[]; text: string; links: string[]; productSignals: string[]; productName?: string; productBrand?: string; productCategory?: string };
-export type AcquisitionAnalyzeResult = { source: PageSnapshot; analysis: AcquisitionAnalysis };
+export type EcPulseProduct = {
+  title: string;
+  url: string;
+  price: number | null;
+  currency: string;
+  marketplace?: string | null;
+  product_id?: string | null;
+};
+
+export type EcPulsePainPoint = {
+  pain: string;
+  count: number;
+  share_percent: number;
+  examples: string[];
+};
+
+export type EcPulseResearch = {
+  url: string;
+  source?: string;
+  title?: string;
+  comments_count?: number;
+  comments?: string[];
+  analysis?: {
+    comments_analyzed: number;
+    pain_points: EcPulsePainPoint[];
+    top_terms: string[];
+    recommended_angle: string | null;
+    ad_copy_candidates?: string[];
+    next_action?: string;
+  };
+};
+
+export type EcPulseResearchBundle = {
+  connected: boolean;
+  research: EcPulseResearch | null;
+  products: EcPulseProduct[];
+  error?: string;
+};
+
+export type AcquisitionAnalyzeResult = {
+  source: PageSnapshot;
+  analysis: AcquisitionAnalysis;
+  ecPulse?: EcPulseResearchBundle;
+};
