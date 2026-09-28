@@ -112,6 +112,7 @@ export default function Home() {
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <span className="status">Customer Acquisition Intelligence</span>
           <GoogleSignIn />
+          <a href="/billing" style={{ color: "#ffffff70", fontSize: 11 }}>契約管理</a>
         </div>
       </header>
 
