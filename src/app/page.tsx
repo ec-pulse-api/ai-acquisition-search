@@ -404,6 +404,27 @@ export default function Home() {
             )}
           </section>
 
+
+      <section className="next">
+        <p className="eyebrow">MONETIZATION</p>
+        <h2>AI集客を継続運用する</h2>
+        <p className="hint">無料枠で分析を試し、継続テスト・自動運用はProへ。</p>
+        <div className="action-list">
+          <article>
+            <b>FREE</b>
+            <div><strong>まず試す</strong><p>商品分析・顧客分析・次の集客アクションを利用。</p><small>月5回まで</small></div>
+          </article>
+          <article>
+            <b>PRO</b>
+            <div><strong>広告運用を回す</strong><p>継続的なテスト、クリエイティブ生成、結果学習を想定。</p><small>Stripe決済を接続すると申込可能</small></div>
+          </article>
+          <article>
+            <b>AGENCY</b>
+            <div><strong>複数商品を運用</strong><p>複数商品の運用・チーム利用向け。</p><small>Stripe接続後に提供</small></div>
+          </article>
+        </div>
+      </section>
+
           <p className="ai-note">
             {result.analysis.aiConnected ? "AI分析: 接続済み" : "AI分析: 未接続（ページ抽出ベース）"}
           </p>
