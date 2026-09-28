@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { analyzeProduct, researchProduct, type ResearchBundle } from "../lib/api";
 
@@ -91,7 +91,7 @@ export default function HomeScreen() {
   );
 }
 
-function Section({eyebrow,title,children}:{eyebrow:string;title:string;children:React.ReactNode}) {
+function Section({eyebrow,title,children}:{eyebrow:string;title:string;children:ReactNode}) {
   return <View style={styles.section}><Text style={styles.eyebrow}>{eyebrow}</Text><Text style={styles.sectionTitle}>{title}</Text><View style={styles.sectionBody}>{children}</View></View>;
 }
 function Decision({label,value}:{label:string;value?:string}) {
