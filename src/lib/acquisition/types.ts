@@ -76,3 +76,16 @@ export type AcquisitionAnalyzeResult = {
   analysis: AcquisitionAnalysis;
   ecPulse?: EcPulseResearchBundle;
 };
+
+export type EcPulseResearchRun = {
+  run_id: string;
+  url: string;
+  source_type?: string | null;
+  market?: string | null;
+  locale?: string | null;
+  title?: string | null;
+  comments_count: number;
+  captured_at: string;
+  top_pain?: { pain: string; count: number; share_percent: number } | null;
+};
+
