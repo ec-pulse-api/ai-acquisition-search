@@ -39,6 +39,7 @@ export default function Home() {
   const [metricsOpen, setMetricsOpen] = useState(false);
   const [metrics, setMetrics] = useState({ impressions:"", views:"", clicks:"", conversions:"", revenue:"", grossProfit:"", adSpend:"" });
   const [verdict, setVerdict] = useState<{verdict:string;reason:string}|null>(null);
+  const [socialPostId, setSocialPostId] = useState("");
   const [researchHistory, setResearchHistory] = useState<EcPulseResearchRun[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -118,6 +119,7 @@ export default function Home() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "テスト計画の保存に失敗しました。");
+      setSocialPostId(body.socialPostId || "");
       setTestSaved(body.message || "テスト計画を保存しました。");
     } catch (err) {
       setError(err instanceof Error ? err.message : "テスト計画の保存に失敗しました。");
@@ -135,11 +137,14 @@ export default function Home() {
       const supabase = createClient(supabaseUrl, anonKey);
       const { data } = await supabase.auth.getSession();
       if (!data.session) throw new Error("先にGoogleでログインしてください。");
-      const saved = await fetch("/api/operator/metrics", { method:"POST", headers:{"Content-Type":"application/json",Authorization:`Bearer ${data.session.access_token}`}, body:JSON.stringify(metrics) });
+      const saved = await fetch("/api/operator/metrics", { method:"POST", headers:{"Content-Type":"application/json",Authorization:`Bearer ${data.session.access_token}`}, body:JSON.stringify({...metrics, socialPostId}) });
       const body = await saved.json();
       if (!saved.ok) throw new Error(body.error || "実績保存に失敗しました。");
-      const socialPostId = body.socialPostId || metrics.socialPostId;
-      if (!socialPostId) throw new Error("投稿IDがありません。まず投稿を登録してください。");
+      if (!socialPostId) throw new Error("先に「このテスト計画を保存」してください。");
+      const decision = await fetch("/api/operator/decision", { method:"POST", headers:{"Content-Type":"application/json",Authorization:`Bearer ${data.session.access_token}`}, body:JSON.stringify({socialPostId}) });
+      const verdictBody = await decision.json();
+      if (!decision.ok) throw new Error(verdictBody.error || "判定に失敗しました。");
+      setVerdict({verdict:verdictBody.verdict, reason:verdictBody.reason});
     } catch(err) { setError(err instanceof Error ? err.message : "実績保存に失敗しました。"); }
   }
 
@@ -485,7 +490,8 @@ export default function Home() {
             <button type="button" onClick={()=>setMetricsOpen(!metricsOpen)}>{metricsOpen ? "入力を閉じる" : "実績を入力する"}</button>
             {metricsOpen && <div className="metrics-form">
               {(["impressions","views","clicks","conversions","revenue","grossProfit","adSpend"] as const).map(k=><label key={k}>{k}<input type="number" value={metrics[k]} onChange={e=>setMetrics({...metrics,[k]:e.target.value})}/></label>)}
-              <p className="hint">※ 判定には「投稿ID」が必要です。自動投稿機能と接続した投稿はIDを保持できます。</p>
+              <p className="hint">テスト計画を保存すると投稿IDが自動発行されます。投稿後の実績を入力してください。</p>
+              <button type="button" onClick={saveMetrics}>実績を保存してAI判定</button>
             </div>}
             {verdict && <div className="verdict"><strong>{verdict.verdict}</strong><p>{verdict.reason}</p></div>}
           </section>
