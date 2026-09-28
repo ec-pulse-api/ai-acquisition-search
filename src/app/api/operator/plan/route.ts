@@ -51,6 +51,28 @@ export async function POST(request: Request) {
     }).select("id, created_at").single();
     if (planError) throw planError;
 
+    const firstPost = analysis.nextPosts?.[0];
+    const { data: creative, error: creativeError } = await db.from("creatives").insert({
+      product_id: productId,
+      plan_id: plan.id,
+      user_id: user.id,
+      title: firstPost?.concept || "広告テストクリエイティブ",
+      variation: "A",
+      hook: firstPost?.hook || decision.valueProposition,
+      scenario: { concept: firstPost?.concept, hook: firstPost?.hook, format: firstPost?.format, channel: firstPost?.channel, testMetric: firstPost?.testMetric },
+      status: "planned",
+    }).select("id").single();
+    if (creativeError) throw creativeError;
+    const { data: socialPost, error: socialPostError } = await db.from("social_posts").insert({
+      creative_id: creative.id,
+      user_id: user.id,
+      network: firstPost?.channel || decision.channel,
+      status: "planned",
+      caption: firstPost?.hook || decision.valueProposition,
+      metadata: { plan_id: plan.id, hypothesis: decision.testPlan },
+    }).select("id").single();
+    if (socialPostError) throw socialPostError;
+
     const { data: run, error: runError } = await db.from("operator_runs").insert({
       product_id: productId,
       user_id: user.id,
