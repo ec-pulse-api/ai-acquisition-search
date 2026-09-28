@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     const research = ingest.results?.[0] ?? null;
+    const runId = research?.trend?.run_id ?? null;
     const painPoints: PainPoint[] = research?.analysis?.pain_points ?? [];
     const queries = [
       ...painPoints.slice(0, 3).map((item) => item.pain),
@@ -97,10 +98,22 @@ export async function POST(request: NextRequest) {
       return true;
     }).slice(0, 15);
 
+    let opportunity = null;
+    if (runId) {
+      const opportunityResponse = await fetch(
+        EC_PULSE_API_URL + "/v1/research/runs/" + encodeURIComponent(runId) + "/opportunity",
+        { method: "GET", headers, cache: "no-store" }
+      );
+      if (opportunityResponse.ok) {
+        opportunity = await opportunityResponse.json().catch(() => null);
+      }
+    }
+
     return NextResponse.json({
       connected: true,
       research,
-      products: deduped
+      products: deduped,
+      opportunity
     });
   } catch (error) {
     return NextResponse.json({
