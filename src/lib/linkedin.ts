@@ -93,3 +93,28 @@ export async function createLinkedInPost(accessToken: string, author: string, co
   if (!response.ok) throw new Error(data.message || data.errorDetail || "LinkedIn post failed");
   return { id: response.headers.get("x-restli-id") || data.id || null, raw: data };
 }
+
+
+export async function getLinkedInMemberPostAnalytics(accessToken: string, postUrn: string) {
+  const params = new URLSearchParams({
+    q: "entity",
+    entity: postUrn,
+    queryType: "ALL",
+    aggregation: "TOTAL",
+    timeRange: "(timeGranularityType:DAY)",
+  });
+  const response = await fetch(
+    "https://api.linkedin.com/rest/memberCreatorPostAnalytics?" + params.toString(),
+    {
+      headers: {
+        Authorization: "Bearer " + accessToken,
+        "Linkedin-Version": LINKEDIN_VERSION,
+        "X-Restli-Protocol-Version": "2.0.0",
+      },
+      cache: "no-store",
+    },
+  );
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || data.errorDetail || "LinkedIn analytics failed");
+  return data;
+}
