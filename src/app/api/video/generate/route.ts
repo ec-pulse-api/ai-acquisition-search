@@ -88,7 +88,7 @@ async function saveVideoToStorage(input: { userId: string; jobId: string; source
 }
 
 export const runtime = "nodejs";
-export const maxDuration = 800;
+export const maxDuration = 300;
 
 function clients() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
