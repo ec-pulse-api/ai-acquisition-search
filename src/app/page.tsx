@@ -34,6 +34,9 @@ export default function Home() {
   const [narrationLoading, setNarrationLoading] = useState(false);
   const [ecPulse, setEcPulse] = useState<EcPulseResearchBundle | null>(null);
   const [ecPulseLoading, setEcPulseLoading] = useState(false);
+  const [testSaving, setTestSaving] = useState(false);
+  const [testSaved, setTestSaved] = useState("");
+
 
   async function analyze(e?: FormEvent) {
     e?.preventDefault();
@@ -78,6 +81,33 @@ export default function Home() {
     }
   }
 
+  async function saveTestPlan() {
+    if (!result) return;
+    setTestSaving(true);
+    setTestSaved("");
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (!supabaseUrl || !anonKey) throw new Error("Supabase設定がありません。");
+      const { createClient } = await import("@supabase/supabase-js");
+      const supabase = createClient(supabaseUrl, anonKey);
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) throw new Error("先にGoogleでログインしてください。");
+      const res = await fetch("/api/operator/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session.access_token}` },
+        body: JSON.stringify({ source: result.source, analysis: result.analysis }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "テスト計画の保存に失敗しました。");
+      setTestSaved(body.message || "テスト計画を保存しました。");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "テスト計画の保存に失敗しました。");
+    } finally {
+      setTestSaving(false);
+    }
+  }
+
   async function generateNarration() {
     setNarrationLoading(true);
     setError("");
@@ -110,7 +140,7 @@ export default function Home() {
           <span>AI集客検索エンジン</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span className="status">Customer Acquisition Intelligence</span>
+          <span className="status">AI AD OPERATOR</span>
           <GoogleSignIn />
           <a href="/billing" style={{ color: "#ffffff70", fontSize: 11 }}>契約管理</a>
         </div>
@@ -119,12 +149,12 @@ export default function Home() {
       <section className="hero">
         <p className="eyebrow">AI CUSTOMER ACQUISITION</p>
         <h1>
-          商品・サービスURLから、
+          商品URLを入れるだけで、
           <br />
-          <span>次にやる集客を判断する。</span>
+          <span>次に試す広告を決める。</span>
         </h1>
         <p className="lead">
-          商品・市場・顧客・競合・実績を分析し、集客課題・機会・優先順位・次に取るべき集客アクションを整理します。
+          分析で終わらず、誰に・何を・どこで訴求するかを決め、次のクリエイティブテストまでつなげます。
         </p>
 
         <form onSubmit={analyze} className="search">
@@ -141,9 +171,12 @@ export default function Home() {
         </form>
 
         {error && <p className="error">{error}</p>}
-        <p className="hint">
-          公開HTMLページを分析します。AIキー未設定時は抽出情報ベースの予備分析を返します。
-        </p>
+        <div className="hero-proof">
+          <div><b>01</b><strong>顧客・市場を分析</strong><span>誰に何が刺さるかを整理</span></div>
+          <div><b>02</b><strong>次の広告を決定</strong><span>Hook・訴求・媒体を優先順位化</span></div>
+          <div><b>03</b><strong>結果から次を改善</strong><span>CTR・CVR・CPAを次のテストへ</span></div>
+        </div>
+        <p className="hint">まずは無料で分析。ログインすると広告テスト仮説を保存できます。</p>
       </section>
 
       {result && (
@@ -375,6 +408,21 @@ export default function Home() {
             </Section>
           )}
 
+          <section className="next test-loop">
+            <p className="eyebrow">AD TEST LOOP</p>
+            <h2>次の広告を「テスト」として残す</h2>
+            <p className="hint">今回の判断を仮説として保存し、投稿結果をもとに次のテストへつなげます。</p>
+            <div className="test-loop-grid">
+              <article><span>仮説</span><strong>{result.analysis.decision.valueProposition}</strong><p>{result.analysis.decision.testPlan}</p></article>
+              <article><span>最初に試す</span><strong>{result.analysis.nextPosts[0]?.hook || "次の投稿仮説"}</strong><p>{result.analysis.nextPosts[0]?.channel} · {result.analysis.nextPosts[0]?.format}</p></article>
+              <article><span>見る数字</span><strong>{result.analysis.nextPosts[0]?.testMetric || "CTR / CVR / CPA"}</strong><p>結果を取得したら、次の訴求・クリエイティブを変更します。</p></article>
+            </div>
+            <button type="button" onClick={saveTestPlan} disabled={testSaving}>
+              {testSaving ? "保存中..." : "このテスト計画を保存"}
+            </button>
+            {testSaved && <p className="success">{testSaved}</p>}
+          </section>
+
           <section className="next">
             <p className="eyebrow">VIDEO ENGINE</p>
             <h2>Gemini TTS ナレーション</h2>
@@ -410,7 +458,7 @@ export default function Home() {
       <section className="next">
         <p className="eyebrow">MONETIZATION</p>
         <h2>AI集客を継続運用する</h2>
-        <p className="hint">無料枠で分析を試し、継続テスト・自動運用はProへ。</p>
+        <p className="hint">無料で入口を試し、Proでは広告テストを継続。結果を蓄積して次の施策につなげます。</p>
         <div className="action-list">
           <article>
             <b>FREE</b>
