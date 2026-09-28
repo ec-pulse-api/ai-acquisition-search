@@ -10,9 +10,19 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
     const body = await request.json();
     const postUrn = typeof body.postUrn === "string" ? body.postUrn.trim() : "";
-    if (!postUrn) return NextResponse.json({ error: "LinkedIn post URNが必要です。" }, { status: 400 });
+    const socialPostId = typeof body.socialPostId === "string" ? body.socialPostId.trim() : "";
+    if (!postUrn && !socialPostId) return NextResponse.json({ error: "LinkedIn投稿を指定してください。" }, { status: 400 });
 
     const supabase = getAdminSupabase();
+    let linkedPostId = socialPostId;
+    let resolvedPostUrn = postUrn;
+    if (socialPostId) {
+      const { data: socialPost, error: socialPostError } = await supabase.from("social_posts").select("id,external_post_id,network").eq("id", socialPostId).eq("user_id", user.id).maybeSingle();
+      if (socialPostError) throw socialPostError;
+      if (!socialPost || socialPost.network !== "linkedin" || !socialPost.external_post_id) return NextResponse.json({ error: "LinkedIn投稿がまだ公開されていません。" }, { status: 400 });
+      resolvedPostUrn = socialPost.external_post_id;
+    }
+
     const { data: account, error } = await supabase.from("linkedin_accounts")
       .select("access_token_encrypted,expires_at")
       .eq("user_id", user.id).maybeSingle();
