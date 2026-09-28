@@ -3,8 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import {
   generateHiggsfieldVideo,
   waitForHiggsfieldVideo
-} from "@/lib/video/higgsfield";
-import { saveVideoToStorage } from "@/lib/video/storage";
+} from "../../../../lib/video/higgsfield";
+import { saveVideoToStorage } from "../../../../lib/video/storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 800;
