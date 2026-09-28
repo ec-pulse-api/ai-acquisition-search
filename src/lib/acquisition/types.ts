@@ -22,4 +22,57 @@ export type AcquisitionAnalysis = {
   aiConnected: boolean;
 };
 export type PageSnapshot = { url: string; title: string; description: string; headings: string[]; text: string; links: string[]; productSignals: string[]; productName?: string; productBrand?: string; productCategory?: string };
-export type AcquisitionAnalyzeResult = { source: PageSnapshot; analysis: AcquisitionAnalysis };
+export type EcPulseProduct = {
+  title: string;
+  url: string;
+  price: number | null;
+  currency: string;
+  marketplace?: string | null;
+  product_id?: string | null;
+};
+
+export type EcPulsePainPoint = {
+  pain: string;
+  count: number;
+  share_percent: number;
+  examples: string[];
+};
+
+export type EcPulseResearch = {
+  url: string;
+  source?: string;
+  title?: string;
+  comments_count?: number;
+  comments?: string[];
+  analysis?: {
+    comments_analyzed: number;
+    pain_points: EcPulsePainPoint[];
+    top_terms: string[];
+    recommended_angle: string | null;
+    ad_copy_candidates?: string[];
+    next_action?: string;
+  };
+};
+
+export type EcPulseOpportunity = {
+  run_id: string;
+  top_pain?: { pain: string; count: number; share_percent: number } | null;
+  emerging_pains?: Array<{ pain: string; count_delta: number; share_delta_percent: number; status: string }>;
+  product_directions?: Array<{ pain: string; product_direction: string; validation: string[] }>;
+  ad_test_angles?: Array<{ pain: string; hook: string; proof: string }>;
+  next_actions?: string[];
+};
+
+export type EcPulseResearchBundle = {
+  connected: boolean;
+  research: EcPulseResearch | null;
+  products: EcPulseProduct[];
+  opportunity?: EcPulseOpportunity | null;
+  error?: string;
+};
+
+export type AcquisitionAnalyzeResult = {
+  source: PageSnapshot;
+  analysis: AcquisitionAnalysis;
+  ecPulse?: EcPulseResearchBundle;
+};

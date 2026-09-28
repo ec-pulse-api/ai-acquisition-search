@@ -1,8 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import type { AcquisitionAnalyzeResult } from "@/lib/acquisition/types";
-import GoogleSignIn from "@/components/GoogleSignIn";
+import { FormEvent, useState } from "react";`r`nimport GoogleSignIn from "@/components/GoogleSignIn";
+import type { AcquisitionAnalyzeResult, EcPulseResearchBundle } from "@/lib/acquisition/types";
 
 function List({ items }: { items: string[] }) {
   return (
@@ -31,6 +30,8 @@ export default function Home() {
   const [narrationText, setNarrationText] = useState("");
   const [narrationAudio, setNarrationAudio] = useState("");
   const [narrationLoading, setNarrationLoading] = useState(false);
+  const [ecPulse, setEcPulse] = useState<EcPulseResearchBundle | null>(null);
+  const [ecPulseLoading, setEcPulseLoading] = useState(false);
 
   async function analyze(e?: FormEvent) {
     e?.preventDefault();
@@ -45,16 +46,31 @@ export default function Home() {
         body: JSON.stringify({ url }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "分析に失敗しました。");
+      if (!res.ok) throw new Error(data.error || "刁E��に失敗しました、E);
 
       setResult(data.data);
+      setEcPulse(null);
+      setEcPulseLoading(true);
+      try {
+        const researchRes = await fetch("/api/ec-pulse-research", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        const researchData = await researchRes.json();
+        setEcPulse(researchData);
+      } catch {
+        setEcPulse({ connected: false, research: null, products: [], error: "EC Pulseリサーチに接続できませんでした、E });
+      } finally {
+        setEcPulseLoading(false);
+      }
       const decision = data.data.analysis.decision;
       setNarrationText(
-        `${decision.target}に向けて、${decision.problem}。だからこそ、${decision.valueProposition}。まずは${decision.channel}で${decision.format}を試してみましょう。`
+        `${decision.target}に向けて、E{decision.problem}。だからこそ、E{decision.valueProposition}。まず�E${decision.channel}で${decision.format}を試してみましょぁE��`
       );
       setNarrationAudio("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "分析に失敗しました。");
+      setError(err instanceof Error ? err.message : "刁E��に失敗しました、E);
     } finally {
       setLoading(false);
     }
@@ -71,14 +87,14 @@ export default function Home() {
         body: JSON.stringify({
           text: narrationText,
           voice: "Kore",
-          style: "自然で明るく、信頼感のある日本語広告ナレーション",
+          style: "自然で明るく、信頼感�Eある日本語庁E��ナレーション",
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "ナレーション生成に失敗しました。");
+      if (!res.ok) throw new Error(data.error || "ナレーション生�Eに失敗しました、E);
       setNarrationAudio(`data:${data.data.mimeType};base64,${data.data.audioBase64}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "ナレーション生成に失敗しました。");
+      setError(err instanceof Error ? err.message : "ナレーション生�Eに失敗しました、E);
     } finally {
       setNarrationLoading(false);
     }
@@ -89,23 +105,20 @@ export default function Home() {
       <header className="topbar">
         <div>
           <strong>AI Acquisition Search</strong>
-          <span>AI集客検索エンジン</span>
+          <span>AI雁E��検索エンジン</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span className="status">Customer Acquisition Intelligence</span>
-          <GoogleSignIn />
-        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>`r`n          <span className="status">Customer Acquisition Intelligence</span>`r`n          <GoogleSignIn />`r`n        </div>
       </header>
 
       <section className="hero">
         <p className="eyebrow">AI CUSTOMER ACQUISITION</p>
         <h1>
-          商品・サービスURLから、
+          啁E��・サービスURLから、E
           <br />
-          <span>次にやる集客を判断する。</span>
+          <span>次にめE��雁E��を判断する、E/span>
         </h1>
         <p className="lead">
-          商品・市場・顧客・競合・実績を分析し、集客課題・機会・優先順位・次に取るべき集客アクションを整理します。
+          啁E��・市場・顧客・競合�E実績を�E析し、E��客課題�E機会�E優先頁E���E次に取るべき集客アクションを整琁E��ます、E
         </p>
 
         <form onSubmit={analyze} className="search">
@@ -117,47 +130,122 @@ export default function Home() {
             required
           />
           <button disabled={loading}>
-            {loading ? "集客分析中..." : "集客分析を開始"}
+            {loading ? "雁E��刁E��中..." : "雁E��刁E��を開姁E}
           </button>
         </form>
 
         {error && <p className="error">{error}</p>}
         <p className="hint">
-          公開HTMLページを分析します。AIキー未設定時は抽出情報ベースの予備分析を返します。
+          公開HTMLペ�Eジを�E析します、EIキー未設定時は抽出惁E��ベ�Eスの予備刁E��を返します、E
         </p>
       </section>
 
       {result && (
         <div className="results">
           <div className="source">
-            <span>分析対象</span>
+            <span>刁E��対象</span>
             <a href={result.source.url} target="_blank" rel="noreferrer">
               {result.source.title || result.source.url}
             </a>
             <small>{result.source.url}</small>
           </div>
 
-          <Section title="01 商品分析">
+          <section className="research-flow">
+            <div className="research-head">
+              <div>
+                <p className="eyebrow">EC PULSE RESEARCH LOOP</p>
+                <h2>市場リサーチEↁE痛点 ↁE啁E��候裁EↁE庁E��訴汁E/h2>
+                <p>公開レビューを集計し、E��出する顧客痛点から啁E��候補と庁E��チE��ト案までつなげます、E/p>
+              </div>
+              <span className={ecPulse?.connected ? "pulse-on" : "pulse-off"}>
+                {ecPulseLoading ? "RESEARCHING" : ecPulse?.connected ? "EC PULSE CONNECTED" : "NOT CONNECTED"}
+              </span>
+            </div>
+            {ecPulseLoading && <div className="research-loading">公開コメントを収集 ↁE痛点を集訁EↁE啁E��候補を検索中…</div>}
+            {!ecPulseLoading && ecPulse?.error && <div className="research-error">{ecPulse.error}</div>}
+            {!ecPulseLoading && ecPulse?.research?.analysis && (
+              <div className="research-grid">
+                <article className="research-card">
+                  <p className="eyebrow">01 PAIN POINTS</p>
+                  <h3>頻出する顧客の痛み</h3>
+                  <div className="pain-list">
+                    {ecPulse.research.analysis.pain_points.slice(0, 5).map((pain) => (
+                      <div key={pain.pain} className="pain-row">
+                        <div><strong>{pain.pain}</strong><small>{pain.count}件 · {pain.share_percent}%</small></div>
+                        <span>{pain.examples?.[0] || "レビュー例なぁE}</span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+                <article className="research-card">
+                  <p className="eyebrow">02 AD ANGLES</p>
+                  <h3>庁E��で検証する訴汁E/h3>
+                  <div className="angle">
+                    <strong>{ecPulse.research.analysis.recommended_angle || "頻出痛点を訴求軸として検証"}</strong>
+                    <ul>
+                      {(ecPulse.research.analysis.ad_copy_candidates || []).slice(0, 4).map((copy, index) => <li key={index}>{copy}</li>)}
+                    </ul>
+                  </div>
+                </article>
+                <article className="research-card candidates">
+                  <p className="eyebrow">03 PRODUCT CANDIDATES</p>
+                  <h3>痛点から探した啁E��候裁E/h3>
+                  {ecPulse.products.length ? ecPulse.products.slice(0, 8).map((product, index) => (
+                    <div className="candidate" key={product.url || product.title || String(index)}>
+                      <div><strong>{product.title || "啁E��候裁E}</strong><small>{product.marketplace || "market"} · {product.price ?? "-"} {product.currency || ""}</small></div>
+                      {product.url && <a href={product.url} target="_blank" rel="noreferrer">見る ↁE/a>}
+                    </div>
+                  )) : <p className="muted">痛点に紐づく商品候補を取得できませんでした、E/p>}
+                </article>
+                {ecPulse.opportunity && (
+                  <article className="research-card opportunity">
+                    <p className="eyebrow">04 OPPORTUNITY ENGINE</p>
+                    <h3>痛点 ↁE啁E��設訁EↁE庁E��チE��チE/h3>
+                    {ecPulse.opportunity.top_pain && (
+                      <p><strong>最重要痛点�E�E/strong>{ecPulse.opportunity.top_pain.pain}�E�EecPulse.opportunity.top_pain.count}件 / {ecPulse.opportunity.top_pain.share_percent}%�E�E/p>
+                    )}
+                    {(ecPulse.opportunity.ad_test_angles || []).slice(0, 3).map((angle, index) => (
+                      <div className="angle" key={index}>
+                        <strong>{angle.hook}</strong>
+                        <small>{angle.proof}</small>
+                      </div>
+                    ))}
+                    {(ecPulse.opportunity.next_actions || []).slice(0, 3).map((action, index) => (
+                      <small key={index}>ↁE{action}</small>
+                    ))}
+                  </article>
+                )}
+                <article className="research-card">
+                  <p className="eyebrow">05 NEXT TEST</p>
+                  <h3>次の庁E��チE��チE/h3>
+                  <p className="test-copy">「{ecPulse.research.analysis.recommended_angle || "最頻出の顧客痛点"}」を主訴求にして、短尺動画・静止画の2パターンを作�E。クリチE��玁E��購入玁E��比輁E��ます、E/p>
+                  {ecPulse.research.analysis.next_action && <small>{ecPulse.research.analysis.next_action}</small>}
+                </article>
+              </div>
+            )}
+          </section>
+
+          <Section title="01 啁E��刁E��">
             <h2>{result.analysis.product.summary}</h2>
             <List items={result.analysis.product.valueProposition} />
           </Section>
 
-          <Section title="02 市場分析">
+          <Section title="02 市場刁E��">
             <h2>{result.analysis.market.summary}</h2>
             <List items={result.analysis.market.signals} />
           </Section>
 
-          <Section title="03 顧客分析">
+          <Section title="03 顧客刁E��">
             <h2>{result.analysis.customer.summary}</h2>
             <List items={[...result.analysis.customer.likelySegments, ...result.analysis.customer.needs]} />
           </Section>
 
-          <Section title="04 競合分析">
+          <Section title="04 競合�E极E>
             <h2>{result.analysis.competitors.summary}</h2>
             <List items={result.analysis.competitors.signals} />
           </Section>
 
-          <Section title="05 実績分析">
+          <Section title="05 実績刁E��">
             <h2>{result.analysis.performance.summary}</h2>
             <List
               items={[
@@ -173,17 +261,17 @@ export default function Home() {
             <article className="decision">
               <strong>狙う顧客</strong>
               <p>{result.analysis.decision.target}</p>
-              <strong>顧客の問題</strong>
+              <strong>顧客の問顁E/strong>
               <p>{result.analysis.decision.problem}</p>
-              <strong>欲求</strong>
+              <strong>欲汁E/strong>
               <p>{result.analysis.decision.desire}</p>
-              <strong>訴求</strong>
+              <strong>訴汁E/strong>
               <p>{result.analysis.decision.valueProposition}</p>
-              <strong>媒体</strong>
+              <strong>媒佁E/strong>
               <p>{result.analysis.decision.channel}</p>
-              <strong>投稿形式</strong>
+              <strong>投稿形弁E/strong>
               <p>{result.analysis.decision.format}</p>
-              <strong>検証方法</strong>
+              <strong>検証方況E/strong>
               <p>{result.analysis.decision.testPlan}</p>
               {result.analysis.decision.evidence?.length > 0 && (
                 <>
@@ -196,7 +284,7 @@ export default function Home() {
 
           <section className="next">
             <p className="eyebrow">NEXT ACTION</p>
-            <h2>次にやるべき集客</h2>
+            <h2>次にめE��べき集客</h2>
             <div className="action-list">
               {result.analysis.priorities.map((item) => (
                 <article key={item.priority}>
@@ -229,9 +317,9 @@ export default function Home() {
             </div>
           </section>
 
-          <Section title="集客課題"><List items={result.analysis.acquisitionProblems} /></Section>
-          <Section title="集客機会"><List items={result.analysis.opportunities} /></Section>
-          <Section title="すぐやること"><List items={result.analysis.nextActions} /></Section>
+          <Section title="雁E��課顁E><List items={result.analysis.acquisitionProblems} /></Section>
+          <Section title="雁E��機企E><List items={result.analysis.opportunities} /></Section>
+          <Section title="すぐめE��こと"><List items={result.analysis.nextActions} /></Section>
 
           {result.analysis.socialSignals?.length > 0 && (
             <Section title="SNS実データ">
@@ -245,7 +333,7 @@ export default function Home() {
                       </a>
                       <p>@{item.author}</p>
                       <small>
-                        TikTok · 再生 {item.views ?? "-"} · いいね {item.likes ?? "-"} · コメント {item.comments ?? "-"} · シェア {item.shares ?? "-"}
+                        TikTok · 再生 {item.views ?? "-"} · ぁE��ね {item.likes ?? "-"} · コメンチE{item.comments ?? "-"} · シェア {item.shares ?? "-"}
                       </small>
                     </div>
                   </article>
@@ -255,7 +343,7 @@ export default function Home() {
           )}
 
           {result.analysis.shopSignals?.length > 0 && (
-            <Section title="TikTok Shop競合">
+            <Section title="TikTok Shop競吁E>
               <div className="action-list">
                 {result.analysis.shopSignals.map((item, index) => (
                   <article key={index}>
@@ -264,7 +352,7 @@ export default function Home() {
                       <a href={item.url || "#"} target="_blank" rel="noreferrer">
                         <strong>{item.title}</strong>
                       </a>
-                      <p>{item.seller || "販売者不明"}</p>
+                      <p>{item.seller || "販売老E���E"}</p>
                       <small>
                         価格 {item.price ?? "-"} {item.currency} · 販売数 {item.sales ?? "-"} · 評価 {item.rating ?? "-"} · レビュー {item.reviewCount ?? "-"}
                       </small>
@@ -277,7 +365,7 @@ export default function Home() {
 
           {result.analysis.searchEvidence?.length > 0 && (
             <Section title="検索エビデンス">
-              <List items={result.analysis.searchEvidence.map((item) => item.title + " — " + item.url + " — " + item.snippet)} />
+              <List items={result.analysis.searchEvidence.map((item) => item.title + "  E" + item.url + "  E" + item.snippet)} />
             </Section>
           )}
 
@@ -285,38 +373,39 @@ export default function Home() {
             <p className="eyebrow">VIDEO ENGINE</p>
             <h2>Gemini TTS ナレーション</h2>
             <p className="hint">
-              集客判断からナレーション本文を作り、Gemini TTSでWAV音声を生成します。
+              雁E��判断からナレーション本斁E��作り、Gemini TTSでWAV音声を生成します、E
             </p>
             <textarea
               value={narrationText}
               onChange={(e) => setNarrationText(e.target.value)}
               rows={5}
               style={{ width: "100%", marginBottom: 12 }}
-              placeholder="ナレーション本文"
+              placeholder="ナレーション本斁E
             />
             <button
               type="button"
               disabled={narrationLoading || !narrationText.trim()}
               onClick={generateNarration}
             >
-              {narrationLoading ? "音声生成中..." : "ナレーションを生成"}
+              {narrationLoading ? "音声生�E中..." : "ナレーションを生戁E}
             </button>
 
             {narrationAudio && (
               <div style={{ marginTop: 16 }}>
                 <audio controls src={narrationAudio} style={{ width: "100%" }} />
                 <a href={narrationAudio} download="narration.wav" style={{ display: "inline-block", marginTop: 8 }}>
-                  WAVを保存
+                  WAVを保孁E
                 </a>
               </div>
             )}
           </section>
 
           <p className="ai-note">
-            {result.analysis.aiConnected ? "AI分析: 接続済み" : "AI分析: 未接続（ページ抽出ベース）"}
+            {result.analysis.aiConnected ? "AI刁E��: 接続済み" : "AI刁E��: 未接続（�Eージ抽出ベ�Eス�E�E}
           </p>
         </div>
       )}
     </main>
   );
 }
+
