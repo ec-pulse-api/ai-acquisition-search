@@ -223,7 +223,7 @@ export default function Home() {
         <p className="hint">まずは商品URLを入力。調査結果は履歴として蓄積し、再調査で変化を追えます。</p>
       </section>
 
-      <LinkedInConnect />
+      <LinkedInConnect socialPostId={socialPostId} />
 
       {result && (
         <div className="results">
