@@ -31,7 +31,13 @@ export async function POST(request: Request) {
       "urn:li:person:" + account.linkedin_sub,
       commentary,
     );
-    return NextResponse.json({ ok: true, post: result });
+    const { error: updateError } = await supabase.from("social_posts").update({
+      network: "linkedin", external_post_id: result.id, status: "published", published_at: new Date().toISOString(),
+      post_url: result.id ? "https://www.linkedin.com/feed/update/" + result.id : null,
+      metadata: { linkedin: { postUrn: result.id } },
+    }).eq("id", socialPost.id).eq("user_id", user.id);
+    if (updateError) throw updateError;
+    return NextResponse.json({ ok: true, post: result, socialPostId: socialPost.id });
   } catch (error) {
     console.error("linkedin post error", error);
     return NextResponse.json({ error: error instanceof Error ? error.message : "LinkedIn投稿に失敗しました。" }, { status: 500 });
