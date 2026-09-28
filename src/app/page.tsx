@@ -197,8 +197,26 @@ export default function Home() {
                     </div>
                   )) : <p className="muted">痛点に紐づく商品候補を取得できませんでした。</p>}
                 </article>
+                {ecPulse.opportunity && (
+                  <article className="research-card opportunity">
+                    <p className="eyebrow">04 OPPORTUNITY ENGINE</p>
+                    <h3>痛点 → 商品設計 → 広告テスト</h3>
+                    {ecPulse.opportunity.top_pain && (
+                      <p><strong>最重要痛点：</strong>{ecPulse.opportunity.top_pain.pain}（{ecPulse.opportunity.top_pain.count}件 / {ecPulse.opportunity.top_pain.share_percent}%）</p>
+                    )}
+                    {(ecPulse.opportunity.ad_test_angles || []).slice(0, 3).map((angle, index) => (
+                      <div className="angle" key={index}>
+                        <strong>{angle.hook}</strong>
+                        <small>{angle.proof}</small>
+                      </div>
+                    ))}
+                    {(ecPulse.opportunity.next_actions || []).slice(0, 3).map((action, index) => (
+                      <small key={index}>→ {action}</small>
+                    ))}
+                  </article>
+                )}
                 <article className="research-card">
-                  <p className="eyebrow">04 NEXT TEST</p>
+                  <p className="eyebrow">05 NEXT TEST</p>
                   <h3>次の広告テスト</h3>
                   <p className="test-copy">「{ecPulse.research.analysis.recommended_angle || "最頻出の顧客痛点"}」を主訴求にして、短尺動画・静止画の2パターンを作成。クリック率と購入率で比較します。</p>
                   {ecPulse.research.analysis.next_action && <small>{ecPulse.research.analysis.next_action}</small>}
