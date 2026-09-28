@@ -1,0 +1,71 @@
+import { NextResponse } from "next/server";
+import { getAdminSupabase, getUserFromBearer } from "@/lib/billing";
+import type { AcquisitionAnalyzeResult } from "@/lib/acquisition/types";
+
+export const runtime = "nodejs";
+
+export async function POST(request: Request) {
+  const user = await getUserFromBearer(request);
+  if (!user) return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
+
+  try {
+    const body = await request.json() as { source?: AcquisitionAnalyzeResult["source"]; analysis?: AcquisitionAnalyzeResult["analysis"] };
+    const source = body.source;
+    const analysis = body.analysis;
+    if (!source?.url || !analysis?.decision) return NextResponse.json({ error: "分析結果が不足しています。" }, { status: 400 });
+
+    const db = getAdminSupabase();
+    const existing = await db.from("products").select("id").eq("user_id", user.id).eq("url", source.url).maybeSingle();
+    if (existing.error) throw existing.error;
+
+    let productId = existing.data?.id as string | undefined;
+    if (productId) {
+      const { error } = await db.from("products").update({
+        name: source.productName || source.title || "商品・サービス",
+        updated_at: new Date().toISOString(),
+      }).eq("id", productId).eq("user_id", user.id);
+      if (error) throw error;
+    } else {
+      const { data, error } = await db.from("products").insert({
+        user_id: user.id,
+        name: source.productName || source.title || "商品・サービス",
+        url: source.url,
+      }).select("id").single();
+      if (error) throw error;
+      productId = data.id;
+    }
+
+    const decision = analysis.decision;
+    const { data: plan, error: planError } = await db.from("acquisition_plans").insert({
+      product_id: productId,
+      user_id: user.id,
+      target: decision.target,
+      pain: decision.problem,
+      desire: decision.desire,
+      value_proposition: decision.valueProposition,
+      channel: decision.channel,
+      format: decision.format,
+      angle: decision.valueProposition,
+      hypothesis: decision.testPlan,
+      status: "planned",
+    }).select("id, created_at").single();
+    if (planError) throw planError;
+
+    const { data: run, error: runError } = await db.from("operator_runs").insert({
+      product_id: productId,
+      user_id: user.id,
+      run_type: "acquisition_test_plan",
+      status: "completed",
+      input: { url: source.url },
+      output: { decision, next_posts: analysis.nextPosts, priorities: analysis.priorities },
+      started_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
+    }).select("id").single();
+    if (runError) throw runError;
+
+    return NextResponse.json({ ok: true, planId: plan.id, runId: run.id, message: "広告テスト仮説を保存しました。結果を入力すると次のテストにつなげられます。" });
+  } catch (error) {
+    console.error("operator plan error", error);
+    return NextResponse.json({ error: "テスト計画の保存に失敗しました。" }, { status: 500 });
+  }
+}
