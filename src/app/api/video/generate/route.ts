@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { generateHiggsfieldVideo } from "@/lib/video/higgsfield";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -66,23 +65,14 @@ export async function POST(request: Request) {
     if (jobError || !job) throw new Error(jobError?.message || "production jobの作成に失敗しました。");
     jobId = job.id;
 
-    const started = await generateHiggsfieldVideo({ prompt, model, duration, resolution, aspectRatio, generateAudio });
-    const requestId = String(started.request_id ?? started.requestId ?? started.id ?? "");
-    if (!requestId) throw new Error("Higgsfieldからrequest_idを取得できませんでした。");
 
-    await admin.from("production_jobs").update({
-      status: "running",
-      request_id: requestId,
-      provider_response: started,
-      started_at: new Date().toISOString()
-    }).eq("id", jobId).eq("user_id", user.id);
 
     return NextResponse.json({
       ok: true,
       jobId,
       requestId,
       status: "running",
-      message: "動画生成を開始しました。バックグラウンドで完成を待機できます。"
+      message: "動画生成Jobをキューに入れました。Workerがバックグラウンドで生成します。"
     }, { status: 202 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "動画生成の開始に失敗しました。";
