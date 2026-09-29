@@ -110,11 +110,36 @@ export async function POST(request: Request) {
 
     const db = getAdminSupabase();
     const { data: post, error: postError } = await db.from("social_posts")
-      .select("id,user_id,network,external_post_id,creative_id,published_at")
+      .select("id,user_id,network,external_post_id,creative_id,published_at,metadata")
       .eq("id", body.socialPostId).eq("user_id", user.id).maybeSingle();
     if (postError) throw postError;
     if (!post) return NextResponse.json({ error: "対象投稿が見つかりません。" }, { status: 404 });
     if (!post.external_post_id) return NextResponse.json({ error: "外部投稿IDがまだありません。" }, { status: 400 });
+
+    // 同じ投稿への同時metrics取得を防ぐ。取得処理は外部APIを含むため、
+    // claimを10分保持し、二重INSERTを起こさない。
+    const claimNow = new Date();
+    const claimCutoff = new Date(claimNow.getTime() - 10 * 60 * 1000).toISOString();
+    const claimMetadata = {
+      ...(post.metadata || {}),
+      metrics_refresh_claimed_at: claimNow.toISOString(),
+    };
+    const { data: claimedPost, error: claimError } = await db.from("social_posts")
+      .update({ metadata: claimMetadata, updated_at: claimNow.toISOString() })
+      .eq("id", post.id)
+      .eq("user_id", user.id)
+      .or(
+        "metadata->>metrics_refresh_claimed_at.is.null,metadata->>metrics_refresh_claimed_at.lt." + claimCutoff,
+      )
+      .select("id")
+      .maybeSingle();
+    if (claimError) throw claimError;
+    if (!claimedPost) {
+      return NextResponse.json(
+        { ok: false, retry: true, error: "同じ投稿の実績取得が現在実行中です。" },
+        { status: 409 },
+      );
+    }
 
     let normalized: NormalizedMetrics;
     let raw: unknown;
