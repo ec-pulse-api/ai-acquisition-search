@@ -27,6 +27,8 @@ export async function POST(request: Request) {
   let nextCreativeId = "";
   let nextPostId = "";
   let operatorRunId = "";
+  let claimId = "";
+  let sourcePostId = "";
   try {
     const user = await getUserFromBearer(request);
     if (!user) return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
@@ -42,6 +44,7 @@ export async function POST(request: Request) {
       autoGenerate?: boolean;
     };
     if (!body.socialPostId) return NextResponse.json({ error: "socialPostIdが必要です。" }, { status: 400 });
+    sourcePostId = body.socialPostId;
     if (body.verdict === "stop") {
       return NextResponse.json({ error: "STOP判定では次Creativeを自動生成しません。" }, { status: 409 });
     }
@@ -76,7 +79,7 @@ export async function POST(request: Request) {
 
     // 競合するCron/リクエストが同じ元投稿を同時処理しないよう、元投稿を原子的にclaimする。
     // claimは30分で期限切れにし、途中失敗時は次回巡回で再取得できるようにする。
-    const claimId = crypto.randomUUID();
+    claimId = crypto.randomUUID();
     const claimNow = new Date();
     const claimCutoff = new Date(claimNow.getTime() - 30 * 60 * 1000).toISOString();
     const claimMetadata = {
@@ -219,13 +222,13 @@ export async function POST(request: Request) {
       if (operatorRunId) await db.from("operator_runs").delete().eq("id", operatorRunId).eq("user_id", userId);
       if (nextPostId) await db.from("social_posts").delete().eq("id", nextPostId).eq("user_id", userId);
       if (nextCreativeId) await db.from("creatives").delete().eq("id", nextCreativeId).eq("user_id", userId);
-      if (userId && post?.id && claimId) {
-        const { data: claimed } = await db.from("social_posts").select("metadata").eq("id", post.id).eq("user_id", userId).maybeSingle();
+      if (userId && sourcePostId && claimId) {
+        const { data: claimed } = await db.from("social_posts").select("metadata").eq("id", sourcePostId).eq("user_id", userId).maybeSingle();
         const metadata = claimed?.metadata && typeof claimed.metadata === "object" ? { ...(claimed.metadata as Record<string, unknown>) } : null;
         if (metadata?.operator_next_creative_claim_id === claimId) {
           delete metadata.operator_next_creative_claim_id;
           delete metadata.operator_next_creative_claimed_at;
-          await db.from("social_posts").update({ metadata, updated_at: new Date().toISOString() }).eq("id", post.id).eq("user_id", userId);
+          await db.from("social_posts").update({ metadata, updated_at: new Date().toISOString() }).eq("id", sourcePostId).eq("user_id", userId);
         }
       }
     } catch (cleanupError) {
