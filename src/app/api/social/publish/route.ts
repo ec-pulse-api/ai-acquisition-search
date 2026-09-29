@@ -3,7 +3,7 @@ import { publishTikTokVideo } from "@/lib/social/tiktok";
 import { publishInstagramReel, publishFacebookReel } from "@/lib/social/meta";
 import { uploadYouTubeVideo } from "@/lib/social/youtube";
 import { publishXPost } from "@/lib/social/x";
-import { createLinkedInPost, decryptLinkedInToken } from "@/lib/linkedin";
+import { createLinkedInPost, createLinkedInVideoPost, decryptLinkedInToken } from "@/lib/linkedin";
 import { getAdminSupabase, getUserFromBearer } from "@/lib/billing";
 import { writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     if (!source) return NextResponse.json({ error: "対象のテスト投稿が見つかりません。" }, { status: 404 });
 
     const results: Array<{platform:string;ok:boolean;postId?:string;url?:string;error?:string}> = [];
-    let tempFile = "";
+    let tempFile = "";\n    let videoBuffer: Uint8Array | null = null;\n    const getVideoBuffer = async () => {\n      if (videoBuffer) return videoBuffer;\n      const response = await fetch(videoUrl);\n      if (!response.ok) throw new Error(`動画取得失敗: HTTP ${response.status}`);\n      videoBuffer = new Uint8Array(await response.arrayBuffer());\n      if (!videoBuffer.byteLength) throw new Error("完成動画が空です。");\n      return videoBuffer;\n    };
     const save = async (network: Platform, externalId: string | null, postUrl: string | null, metadata: Record<string,unknown> = {}) => {
       const { error } = await supabase.from("social_posts").insert({
         creative_id: source.creative_id, user_id: user.id, network,
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
             await save(platform,r.videoId,r.url,r);
             results.push({platform,ok:true,postId:r.videoId,url:r.url ?? undefined});
           } else if (platform === "x") {
-            const r = await publishXPost({text:caption.slice(0,280)});
+            const r = await publishXPost({text:caption.slice(0,280),video:await getVideoBuffer()});
             await save(platform,r.postId,r.url,r);
             results.push({platform,ok:true,postId:r.postId,url:r.url});
           } else {
@@ -80,9 +80,9 @@ export async function POST(request: Request) {
             if (error) throw error;
             if (!account) throw new Error("LinkedInを先に接続してください。");
             if (account.expires_at && new Date(account.expires_at).getTime() <= Date.now()) throw new Error("LinkedInアクセストークンの有効期限が切れています。");
-            const r = await createLinkedInPost(decryptLinkedInToken(account.access_token_encrypted),"urn:li:person:"+account.linkedin_sub,caption);
+            const r = await createLinkedInVideoPost(decryptLinkedInToken(account.access_token_encrypted),"urn:li:person:"+account.linkedin_sub,caption,await getVideoBuffer());
             const url = r.id ? "https://www.linkedin.com/feed/update/"+r.id : null;
-            await save(platform,r.id,url,{postUrn:r.id});
+            await save(platform,r.id,url,{postUrn:r.id,videoUrn:r.videoUrn});
             results.push({platform,ok:true,postId:r.id ?? undefined,url:url ?? undefined});
           }
         } catch (e) {
