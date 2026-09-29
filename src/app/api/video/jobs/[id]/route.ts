@@ -67,6 +67,22 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         aspect_ratio: job.aspect_ratio,
         metadata: { bytes: stored.bytes, contentType: stored.contentType, requestId: job.request_id }
       }).select("id,video_url,storage_path,provider,model,duration,resolution,aspect_ratio,created_at").single();
+      if (assetError?.code === "23505") {
+        const { data: concurrentAsset, error: concurrentAssetError } = await admin.from("video_assets")
+          .select("id,video_url,storage_path,provider,model,duration,resolution,aspect_ratio,created_at")
+          .eq("production_job_id", job.id)
+          .maybeSingle();
+        if (concurrentAssetError || !concurrentAsset) {
+          throw new Error(concurrentAssetError?.message || "競合したvideo assetを再取得できませんでした。");
+        }
+        await admin.from("production_jobs").update({
+          status: "completed",
+          provider_response: result,
+          completed_at: new Date().toISOString(),
+          error: null
+        }).eq("id", job.id).eq("user_id", user.id);
+        return NextResponse.json({ ok: true, job: { ...job, status: "completed" }, asset: concurrentAsset });
+      }
       if (assetError || !asset) throw new Error(assetError?.message || "video assetの保存に失敗しました。");
 
       if (job.creative_id) {
