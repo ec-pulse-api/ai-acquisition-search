@@ -5,8 +5,8 @@ export const metadata: Metadata = {
   title: "AI Acquisition Search | AI集客検索エンジン",
   description: "商品・市場・顧客・競合・実績を分析し、次に取るべき集客アクションを判断するAIシステム。",
   icons: {
-    icon: "/icon",
-    apple: "/apple-icon",
+    icon: "/icon.svg",
+    apple: "/icon.svg",
   },
   manifest: "/manifest.webmanifest",
 };

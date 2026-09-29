@@ -1,0 +1,138 @@
+name: Android AAB
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "capacitor.config.ts"
+      - "src/**"
+      - "public/**"
+      - ".github/workflows/android-aab.yml"
+
+jobs:
+  build-aab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Verify web build
+        run: npm run build
+
+      - name: Verify Capacitor
+        run: npx cap --version
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Apply native app icon
+        run: |
+          python -m pip install --quiet pillow
+          python scripts/generate-native-icons.py
+
+      - name: Configure Android signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload.keystore
+          cat > android/keystore.properties <<EOF
+          storeFile=upload.keystore
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle")
+          s = p.read_text()
+          signing = '''
+          def keystoreProperties = new Properties()
+          def keystorePropertiesFile = rootProject.file("keystore.properties")
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+          }
+
+          '''
+          if "def keystoreProperties = new Properties()" not in s:
+              s = signing + s
+          if "signingConfigs {" not in s:
+              s = s.replace(
+                  "android {",
+                  '''android {
+              signingConfigs {
+                  release {
+                      storeFile keystoreProperties["storeFile"] ? file(keystoreProperties["storeFile"]) : null
+                      storePassword keystoreProperties["storePassword"]
+                      keyAlias keystoreProperties["keyAlias"]
+                      keyPassword keystoreProperties["keyPassword"]
+                  }
+              }''',
+                  1,
+              )
+          s = s.replace(
+              "buildTypes {",
+              '''buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }''',
+              1,
+          )
+          p.write_text(s)
+          PY
+
+      - name: Build release AAB
+        working-directory: android
+        run: ./gradlew bundleRelease --no-daemon --stacktrace
+
+      - name: Verify AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s android/app/build/outputs/bundle/release/app-release.aab
+          ls -lh android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-acquisition-search-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14
