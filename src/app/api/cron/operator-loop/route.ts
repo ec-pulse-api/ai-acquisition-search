@@ -19,16 +19,33 @@ async function internalRequest(
   userId: string,
   body?: Record<string, unknown>,
 ) {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-internal-secret": process.env.CRON_SECRET || "",
+    "x-internal-user-id": userId,
+  };
+
+  // Production can be protected by Vercel Authentication. In that case,
+  // server-to-server calls must use Vercel's automation bypass header when
+  // configured; otherwise a 302/HTML response could be mistaken for success.
+  if (process.env.VERCEL_AUTOMATION_BYPASS_SECRET) {
+    headers["x-vercel-protection-bypass"] = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+  }
+
   const response = await fetch(`https://${baseUrl()}${path}`, {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      "x-internal-secret": process.env.CRON_SECRET || "",
-      "x-internal-user-id": userId,
-    },
+    headers,
     ...(body ? { body: JSON.stringify(body) } : {}),
     cache: "no-store",
+    redirect: "manual",
   });
+
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(
+      `Internal operator request was redirected (HTTP ${response.status}). Check Vercel Deployment Protection and VERCEL_AUTOMATION_BYPASS_SECRET.`,
+    );
+  }
+
   const payload = await response.json().catch(() => ({}));
   return { status: response.status, payload };
 }
