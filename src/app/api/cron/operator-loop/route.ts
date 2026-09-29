@@ -202,7 +202,7 @@ export async function GET(request: Request) {
   // Higgsfieldの未完了ジョブを回収し、完成したらそのままSNSへ投稿する。
   const { data: jobs } = await db.from("production_jobs")
     .select("id,user_id,social_post_id,status,request_id,prompt,duration,resolution,aspect_ratio,model,provider_response,error,created_at,started_at")
-    .in("status", ["queued","running","failed"])
+    .in("status", ["queued","running","failed","completed"])
     .order("created_at", { ascending: true })
     .limit(30);
 
@@ -243,6 +243,28 @@ export async function GET(request: Request) {
 
       if (job.status === "failed" && providerResponse.manual_recovery_required === true) {
         results.push({ jobId: job.id, step: "video-retry", status: "manual-recovery-required" });
+        continue;
+      }
+
+      // 生成済み動画のSNS投稿だけが失敗した場合も再巡回する。
+      // /api/social/publish 側の予約・一意制約で二重投稿を防ぐ。
+      if (job.status === "completed" && job.social_post_id) {
+        const { data: asset } = await db.from("video_assets")
+          .select("video_url")
+          .eq("production_job_id", job.id)
+          .maybeSingle();
+        if (!asset?.video_url) {
+          results.push({ jobId: job.id, step: "video-publish", status: "completed-without-asset" });
+          continue;
+        }
+        const publish = await publishCompletedVideo(db, job.user_id, job.social_post_id, asset.video_url);
+        results.push({
+          jobId: job.id,
+          step: "video-publish-retry",
+          status: "completed",
+          published: publish.ok,
+          publishResult: publish,
+        });
         continue;
       }
 
