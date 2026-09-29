@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getUserFromBearer } from "@/lib/billing";
 
 export const runtime = "nodejs";
 
 const EC_PULSE_API_URL = (process.env.EC_PULSE_API_URL || "https://ec-pulse-rk8mola3m-naitoshyuichirou-6935.vercel.app").replace(/\/$/, "");
 
 export async function GET(request: NextRequest) {
+  const user = await getUserFromBearer(request);
+  if (!user) return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
+
   const apiKey = process.env.EC_PULSE_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ connected: false, runs: [], error: "EC_PULSE_API_KEY が未設定です。" });
