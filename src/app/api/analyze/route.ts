@@ -79,13 +79,14 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getUserFromBearer(request);
     if (!user) return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
-    const usage = await consumeMonthlyUsage(user.id, "acquisition_analysis", 5);
-    if (!usage.allowed) return NextResponse.json({ error: `今月の無料分析回数（${usage.limit}回）を使い切りました。Proへアップグレードしてください。`, usage }, { status: 429 });
     const body = await request.json();
     const url = typeof body?.url === "string" ? body.url.trim() : "";
     if (!url) {
       return NextResponse.json({ error: "商品・サービスURLを入力してください。" }, { status: 400 });
     }
+    if (url.length > 2048) return NextResponse.json({ error: "URLが長すぎます。" }, { status: 400 });
+    const usage = await consumeMonthlyUsage(user.id, "acquisition_analysis", 5);
+    if (!usage.allowed) return NextResponse.json({ error: `今月の無料分析回数（${usage.limit}回）を使い切りました。Proへアップグレードしてください。`, usage }, { status: 429 });
 
     const source = await buildSource(url);
     const search = await discoverAcquisitionSignals({
