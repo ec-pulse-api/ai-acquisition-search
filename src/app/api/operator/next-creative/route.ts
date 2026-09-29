@@ -56,6 +56,7 @@ export async function POST(request: Request) {
       .select("id,creative_id,network,status,metadata")
       .eq("user_id", user.id)
       .eq("metadata->>source_social_post_id", post.id)
+      .eq("network", post.network)
       .limit(1);
     if (existingPosts?.[0]) {
       const existingPost = existingPosts[0];
@@ -218,6 +219,15 @@ export async function POST(request: Request) {
       if (operatorRunId) await db.from("operator_runs").delete().eq("id", operatorRunId).eq("user_id", userId);
       if (nextPostId) await db.from("social_posts").delete().eq("id", nextPostId).eq("user_id", userId);
       if (nextCreativeId) await db.from("creatives").delete().eq("id", nextCreativeId).eq("user_id", userId);
+      if (userId && post?.id && claimId) {
+        const { data: claimed } = await db.from("social_posts").select("metadata").eq("id", post.id).eq("user_id", userId).maybeSingle();
+        const metadata = claimed?.metadata && typeof claimed.metadata === "object" ? { ...(claimed.metadata as Record<string, unknown>) } : null;
+        if (metadata?.operator_next_creative_claim_id === claimId) {
+          delete metadata.operator_next_creative_claim_id;
+          delete metadata.operator_next_creative_claimed_at;
+          await db.from("social_posts").update({ metadata, updated_at: new Date().toISOString() }).eq("id", post.id).eq("user_id", userId);
+        }
+      }
     } catch (cleanupError) {
       console.error("next creative rollback failed", cleanupError);
     }
