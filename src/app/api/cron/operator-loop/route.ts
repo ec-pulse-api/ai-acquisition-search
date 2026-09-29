@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/billing";
+import { generateHiggsfieldVideo } from "@/lib/video/higgsfield";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -12,19 +13,82 @@ function baseUrl() {
   ).replace(/^https?:\/\//, "");
 }
 
-async function internalPost(path: string, userId: string, body: Record<string, unknown>) {
+async function internalRequest(
+  method: "GET" | "POST",
+  path: string,
+  userId: string,
+  body?: Record<string, unknown>,
+) {
   const response = await fetch(`https://${baseUrl()}${path}`, {
-    method: "POST",
+    method,
     headers: {
       "Content-Type": "application/json",
       "x-internal-secret": process.env.CRON_SECRET || "",
       "x-internal-user-id": userId,
     },
-    body: JSON.stringify(body),
+    ...(body ? { body: JSON.stringify(body) } : {}),
     cache: "no-store",
   });
   const payload = await response.json().catch(() => ({}));
   return { status: response.status, payload };
+}
+
+async function publishCompletedVideo(
+  db: ReturnType<typeof getAdminSupabase>,
+  userId: string,
+  socialPostId: string,
+  videoUrl: string,
+) {
+  const { data: nextPost } = await db.from("social_posts")
+    .select("id,network,caption,status,metadata")
+    .eq("id", socialPostId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!nextPost) return { ok: false, skipped: true, reason: "next social post not found" };
+  if (!["tiktok","instagram","facebook","youtube","x","linkedin"].includes(nextPost.network)) {
+    return { ok: false, skipped: true, reason: `unsupported network: ${nextPost.network}` };
+  }
+
+  const { data: existing } = await db.from("social_posts")
+    .select("id,status,external_post_id")
+    .eq("user_id", userId)
+    .or(`metadata->>sourceSocialPostId.eq.${nextPost.id},metadata->>source_social_post_id.eq.${nextPost.id}`)
+    .eq("network", nextPost.network)
+    .limit(1);
+
+  if (existing?.[0]?.external_post_id) {
+    return { ok: true, skipped: true, reason: "already published", postId: existing[0].id };
+  }
+
+  const result = await internalRequest("POST", "/api/social/publish", userId, {
+    socialPostId: nextPost.id,
+    videoUrl,
+    caption: nextPost.caption || "AI-generated acquisition creative",
+    platforms: [nextPost.network],
+  });
+
+  if (result.status < 200 || result.status >= 300) {
+    return { ok: false, status: result.status, error: result.payload?.error };
+  }
+
+  const published = Array.isArray(result.payload?.results)
+    ? result.payload.results.filter((item: any) => item?.ok)
+    : [];
+
+  if (published.length > 0) {
+    await db.from("social_posts").update({
+      status: "published",
+      metadata: {
+        ...(nextPost.metadata || {}),
+        auto_published_at: new Date().toISOString(),
+        auto_publish_result: result.payload,
+      },
+      updated_at: new Date().toISOString(),
+    }).eq("id", nextPost.id).eq("user_id", userId);
+  }
+
+  return { ok: published.length > 0, status: result.status, result: result.payload };
 }
 
 export async function GET(request: Request) {
@@ -35,79 +99,126 @@ export async function GET(request: Request) {
 
   const db = getAdminSupabase();
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const results: unknown[] = [];
 
   const { data: posts, error } = await db
     .from("social_posts")
     .select("id,user_id,network,published_at,external_post_id")
     .eq("status", "published")
-    .eq("network", "linkedin")
     .not("external_post_id", "is", null)
     .lt("published_at", cutoff)
     .order("published_at", { ascending: true })
-    .limit(20);
+    .limit(50);
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-  const results: unknown[] = [];
-  const processedUsers = new Set<string>();
-
+  // 投稿単位で処理する。ユーザー単位で1件に制限しない。
   for (const post of posts || []) {
-    if (!post.user_id || processedUsers.has(post.user_id)) continue;
+    if (!post.user_id) continue;
 
-    const { data: latestMetric } = await db
-      .from("post_metrics")
-      .select("measured_at")
-      .eq("social_post_id", post.id)
-      .order("measured_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    try {
+      const { data: latestMetric } = await db
+        .from("post_metrics")
+        .select("measured_at")
+        .eq("social_post_id", post.id)
+        .order("measured_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-    if (latestMetric?.measured_at && new Date(latestMetric.measured_at).getTime() > Date.now() - 23 * 60 * 60 * 1000) {
-      continue;
+      if (latestMetric?.measured_at && new Date(latestMetric.measured_at).getTime() > Date.now() - 23 * 60 * 60 * 1000) {
+        continue;
+      }
+
+      const metrics = await internalRequest("POST", "/api/social/metrics", post.user_id, {
+        socialPostId: post.id,
+      });
+      if (metrics.status < 200 || metrics.status >= 300) {
+        results.push({ postId: post.id, network: post.network, step: "metrics", status: metrics.status, error: metrics.payload?.error });
+        continue;
+      }
+
+      const decision = await internalRequest("POST", "/api/operator/ai-decision", post.user_id, {
+        socialPostId: post.id,
+      });
+      if (decision.status < 200 || decision.status >= 300) {
+        results.push({ postId: post.id, network: post.network, step: "decision", status: decision.status, error: decision.payload?.error });
+        continue;
+      }
+
+      if (decision.payload?.verdict === "stop") {
+        results.push({ postId: post.id, network: post.network, verdict: "stop", nextCreative: false });
+        continue;
+      }
+
+      const next = await internalRequest("POST", "/api/operator/next-creative", post.user_id, {
+        socialPostId: post.id,
+        verdict: decision.payload?.verdict,
+        nextAction: decision.payload?.nextAction,
+        changedAngle: decision.payload?.changedAngle,
+        changedHook: decision.payload?.changedHook,
+        testMetric: decision.payload?.testMetric,
+        autoGenerate: true,
+      });
+
+      results.push({
+        postId: post.id,
+        network: post.network,
+        verdict: decision.payload?.verdict,
+        nextCreative: next.status >= 200 && next.status < 300,
+        nextStatus: next.status,
+        nextCreativeId: next.payload?.creative?.id,
+        videoJobId: next.payload?.video?.jobId,
+        reused: next.payload?.reused === true,
+        error: next.status >= 300 ? next.payload?.error : undefined,
+      });
+    } catch (error) {
+      results.push({
+        postId: post.id,
+        network: post.network,
+        step: "post-loop",
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
+  }
 
-    const metrics = await internalPost("/api/social/metrics", post.user_id, {
-      socialPostId: post.id,
-    });
-    if (metrics.status < 200 || metrics.status >= 300) {
-      results.push({ postId: post.id, step: "metrics", status: metrics.status, error: metrics.payload?.error });
-      continue;
+  // Higgsfieldの未完了ジョブを回収し、完成したらそのままSNSへ投稿する。
+  const { data: jobs } = await db.from("production_jobs")
+    .select("id,user_id,social_post_id,status,request_id,prompt,duration,resolution,aspect_ratio,model,created_at")
+    .in("status", ["queued","running"])
+    .not("request_id", "is", null)
+    .order("created_at", { ascending: true })
+    .limit(30);
+
+  for (const job of jobs || []) {
+    if (!job.user_id || !job.request_id) continue;
+
+    try {
+      const polled = await internalRequest("GET", `/api/video/jobs/${job.id}`, job.user_id);
+      const asset = polled.payload?.asset;
+
+      if (polled.status >= 200 && polled.status < 300 && asset?.video_url && polled.payload?.job?.status === "completed" && job.social_post_id) {
+        const publish = await publishCompletedVideo(db, job.user_id, job.social_post_id, asset.video_url);
+        results.push({
+          jobId: job.id,
+          step: "video-publish",
+          status: polled.payload?.job?.status,
+          published: publish.ok,
+          publishResult: publish,
+        });
+      } else {
+        results.push({
+          jobId: job.id,
+          step: "video-poll",
+          status: polled.payload?.job?.status || polled.status,
+        });
+      }
+    } catch (error) {
+      results.push({
+        jobId: job.id,
+        step: "video-poll",
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
-
-    const decision = await internalPost("/api/operator/ai-decision", post.user_id, {
-      socialPostId: post.id,
-    });
-    if (decision.status < 200 || decision.status >= 300) {
-      results.push({ postId: post.id, step: "decision", status: decision.status, error: decision.payload?.error });
-      continue;
-    }
-
-    if (decision.payload?.verdict === "stop") {
-      results.push({ postId: post.id, verdict: "stop", nextCreative: false });
-      processedUsers.add(post.user_id);
-      continue;
-    }
-
-    const next = await internalPost("/api/operator/next-creative", post.user_id, {
-      socialPostId: post.id,
-      verdict: decision.payload?.verdict,
-      nextAction: decision.payload?.nextAction,
-      changedAngle: decision.payload?.changedAngle,
-      changedHook: decision.payload?.changedHook,
-      testMetric: decision.payload?.testMetric,
-      autoGenerate: true,
-    });
-
-    results.push({
-      postId: post.id,
-      verdict: decision.payload?.verdict,
-      nextCreative: next.status >= 200 && next.status < 300,
-      nextStatus: next.status,
-      nextCreativeId: next.payload?.creative?.id,
-      videoJobId: next.payload?.video?.jobId,
-      error: next.status >= 300 ? next.payload?.error : undefined,
-    });
-    processedUsers.add(post.user_id);
   }
 
   return NextResponse.json({
