@@ -69,6 +69,33 @@ export async function POST(request: Request) {
       });
     }
 
+    // 競合するCron/リクエストが同じ元投稿を同時処理しないよう、元投稿を原子的にclaimする。
+    // claimは30分で期限切れにし、途中失敗時は次回巡回で再取得できるようにする。
+    const claimId = crypto.randomUUID();
+    const claimNow = new Date();
+    const claimCutoff = new Date(claimNow.getTime() - 30 * 60 * 1000).toISOString();
+    const claimMetadata = {
+      ...(post.metadata || {}),
+      operator_next_creative_claim_id: claimId,
+      operator_next_creative_claimed_at: claimNow.toISOString(),
+    };
+    const { data: claimedPost, error: claimError } = await db.from("social_posts")
+      .update({ metadata: claimMetadata, updated_at: claimNow.toISOString() })
+      .eq("id", post.id)
+      .eq("user_id", user.id)
+      .or(
+        "metadata->>operator_next_creative_claimed_at.is.null,metadata->>operator_next_creative_claimed_at.lt." + claimCutoff,
+      )
+      .select("id")
+      .maybeSingle();
+    if (claimError) throw claimError;
+    if (!claimedPost) {
+      return NextResponse.json(
+        { ok: true, reused: true, processing: true, reason: "next creative generation is already claimed" },
+        { status: 202 },
+      );
+    }
+
     const { data: creative, error: creativeError } = await db.from("creatives")
       .select("id,product_id,plan_id,title,variation,hook,scenario,generation_provider,generation_model")
       .eq("id", post.creative_id).eq("user_id", user.id).maybeSingle();
