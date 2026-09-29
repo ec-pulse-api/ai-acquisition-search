@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const results: Array<{platform:string;ok:boolean;postId?:string;url?:string;error?:string}> = [];
+    const results: Array<{platform:string;ok:boolean;postId?:string;url?:string;error?:string;manualRecoveryRequired?:boolean}> = [];
     let tempFile = "";
     let videoBuffer: Uint8Array | null = null;
     const getVideoBuffer = async () => {
@@ -135,6 +135,7 @@ export async function POST(request: Request) {
     try {
       for (const platform of platforms) {
         let reservation: Awaited<ReturnType<typeof reserve>> | null = null;
+        let externalPublishSucceeded = false;
         try {
           reservation = await reserve(platform);
           if (!reservation.claimed) {
@@ -158,14 +159,17 @@ export async function POST(request: Request) {
           const rowId = reservation.row.id;
           if (platform === "tiktok") {
             const r = await publishTikTokVideo({videoUrl,title:caption,isAigc:true});
+            externalPublishSucceeded = true;
             const saved = await complete(rowId,platform,r.publishId,null,{publishId:r.publishId});
             results.push({platform,ok:true,postId:saved.external_post_id ?? r.publishId});
           } else if (platform === "instagram") {
             const r = await publishInstagramReel({videoUrl,caption});
+            externalPublishSucceeded = true;
             const saved = await complete(rowId,platform,r.mediaId,null,r);
             results.push({platform,ok:true,postId:saved.external_post_id ?? r.mediaId});
           } else if (platform === "facebook") {
             const r = await publishFacebookReel({videoUrl,caption});
+            externalPublishSucceeded = true;
             const saved = await complete(rowId,platform,r.videoId,null,r);
             results.push({platform,ok:true,postId:saved.external_post_id ?? r.videoId});
           } else if (platform === "youtube") {
@@ -174,10 +178,12 @@ export async function POST(request: Request) {
             tempFile = path.join(os.tmpdir(),`ai-acquisition-${source.id}.mp4`);
             await writeFile(tempFile,Buffer.from(await response.arrayBuffer()));
             const r = await uploadYouTubeVideo({filePath:tempFile,title:caption,description:caption,privacyStatus:"public",containsSyntheticMedia:true});
+            externalPublishSucceeded = true;
             const saved = await complete(rowId,platform,r.videoId,r.url,r);
             results.push({platform,ok:true,postId:saved.external_post_id ?? r.videoId,url:saved.post_url ?? r.url ?? undefined});
           } else if (platform === "x") {
             const r = await publishXPost({text:caption.slice(0,280),video:await getVideoBuffer()});
+            externalPublishSucceeded = true;
             const saved = await complete(rowId,platform,r.postId,r.url,r);
             results.push({platform,ok:true,postId:saved.external_post_id ?? r.postId,url:saved.post_url ?? r.url});
           } else {
@@ -187,14 +193,37 @@ export async function POST(request: Request) {
             if (!account) throw new Error("LinkedInを先に接続してください。");
             if (account.expires_at && new Date(account.expires_at).getTime() <= Date.now()) throw new Error("LinkedInアクセストークンの有効期限が切れています。");
             const r = await createLinkedInVideoPost(decryptLinkedInToken(account.access_token_encrypted),"urn:li:person:"+account.linkedin_sub,caption,await getVideoBuffer());
+            externalPublishSucceeded = true;
             const url = r.id ? "https://www.linkedin.com/feed/update/"+r.id : null;
             const saved = await complete(rowId,platform,r.id,url,{postUrn:r.id,videoUrn:r.videoUrn});
             results.push({platform,ok:true,postId:saved.external_post_id ?? undefined,url:saved.post_url ?? undefined});
           }
         } catch (e) {
           const message = e instanceof Error ? e.message : String(e);
-          if (reservation?.claimed) await fail(reservation.row.id, message);
-          results.push({platform,ok:false,error:message});
+          if (reservation?.claimed && !externalPublishSucceeded) {
+            await fail(reservation.row.id, message);
+            results.push({platform,ok:false,error:message});
+          } else if (reservation?.claimed && externalPublishSucceeded) {
+            // 外部SNS側では投稿済みなので、DB保存だけ失敗した場合はfailedへ戻さない。
+            // failedにすると次回実行が再投稿し、二重投稿になる可能性がある。
+            await supabase.from("social_posts").update({
+              metadata: {
+                source_social_post_id: socialPostId,
+                external_publish_succeeded: true,
+                manual_recovery_required: true,
+                publish_persistence_error: message,
+              },
+              updated_at: new Date().toISOString(),
+            }).eq("id", reservation.row.id).eq("user_id", user.id).eq("status", "publishing");
+            results.push({
+              platform,
+              ok: false,
+              manualRecoveryRequired: true,
+              error: "外部SNSへの投稿は成功した可能性がありますが、結果のDB保存に失敗しました。二重投稿防止のため自動再投稿は行いません。",
+            });
+          } else {
+            results.push({platform,ok:false,error:message});
+          }
         }
       }
     } finally {
