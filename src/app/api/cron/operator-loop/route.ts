@@ -199,14 +199,21 @@ export async function GET(request: Request) {
         : {};
       const retryCount = Number(providerResponse.retry_count || 0);
 
-      // 旧実行が外部API呼び出し前に落ちた場合の回収。
+      // 外部API呼び出し後にWorkerがDB更新前で落ちると、Higgsfield側では
+      // 生成が進行している可能性がある。Higgsfieldに汎用idempotency keyを
+      // 付けられることを確認できないため、自動再送はせず手動復旧対象にする。
       if (job.status === "running" && !job.request_id) {
         const startedAt = job.started_at ? new Date(job.started_at).getTime() : 0;
         if (startedAt && startedAt < Date.now() - 15 * 60 * 1000) {
           await db.from("production_jobs")
             .update({
               status: "failed",
-              error: "Higgsfield開始前にworkerがタイムアウトした可能性があります。自動再試行します。",
+              error: "Higgsfield開始後にrequest_id保存前でWorkerが停止した可能性があります。外部生成の有無を確認してから再実行してください。",
+              provider_response: {
+                ...providerResponse,
+                manual_recovery_required: true,
+                manual_recovery_marked_at: new Date().toISOString(),
+              },
               updated_at: new Date().toISOString(),
             })
             .eq("id", job.id)
@@ -214,6 +221,11 @@ export async function GET(request: Request) {
             .eq("status", "running")
             .is("request_id", null);
         }
+        continue;
+      }
+
+      if (job.status === "failed" && providerResponse.manual_recovery_required === true) {
+        results.push({ jobId: job.id, step: "video-retry", status: "manual-recovery-required" });
         continue;
       }
 
