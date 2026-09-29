@@ -88,11 +88,12 @@ export async function POST(request: Request) {
         }),
       });
       if (response.ok) {
-        const payload = await response.json();
-        const content = payload.choices?.[0]?.message?.content;
-        if (content) {
-          const parsed = JSON.parse(content);
-          if (["continue","pivot","stop"].includes(parsed.verdict) && parsed.reason && parsed.nextAction) {
+        try {
+          const payload = await response.json();
+          const content = payload.choices?.[0]?.message?.content;
+          if (content) {
+            const parsed = JSON.parse(content);
+            if (["continue","pivot","stop"].includes(parsed.verdict) && parsed.reason && parsed.nextAction) {
             // 売上・クリック等が取得できないSNSでは、LLMが不足データだけでSTOPを出さない。
             // 実測シグナルがない場合は、必ずフォールバックの安全な判定を優先する。
             const hasObservedDecisionSignal =
@@ -114,7 +115,11 @@ export async function POST(request: Request) {
               ...(parsed.testMetric ? { testMetric: String(parsed.testMetric) } : {}),
             } as any;
             aiConnected = true;
+            }
           }
+        } catch (parseError) {
+          console.warn("ai decision response parse failed; using fallback", parseError);
+          decision = fallback;
         }
       }
     }
