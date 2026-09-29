@@ -93,8 +93,20 @@ export async function POST(request: Request) {
         if (content) {
           const parsed = JSON.parse(content);
           if (["continue","pivot","stop"].includes(parsed.verdict) && parsed.reason && parsed.nextAction) {
+            // 売上・クリック等が取得できないSNSでは、LLMが不足データだけでSTOPを出さない。
+            // 実測シグナルがない場合は、必ずフォールバックの安全な判定を優先する。
+            const hasObservedDecisionSignal =
+              metric.roas != null ||
+              metric.ctr != null ||
+              metric.cvr != null ||
+              Number(metric.clicks || 0) > 0 ||
+              Number(metric.conversions || 0) > 0 ||
+              Number(metric.revenue || 0) > 0 ||
+              Number(metric.ad_spend || 0) > 0 ||
+              post.network === "linkedin";
+
             decision = {
-              verdict: parsed.verdict,
+              verdict: !hasObservedDecisionSignal && parsed.verdict === "stop" ? fallback.verdict : parsed.verdict,
               reason: String(parsed.reason),
               nextAction: String(parsed.nextAction),
               ...(parsed.changedAngle ? { changedAngle: String(parsed.changedAngle) } : {}),
