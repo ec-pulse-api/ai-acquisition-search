@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { consumeMonthlyUsage, getUserFromBearer } from "@/lib/billing";
+import { consumeMonthlyUsage, getUserFromBearer, refundMonthlyUsage } from "@/lib/billing";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -16,6 +16,7 @@ function clients() {
 
 export async function POST(request: Request) {
   let jobId = "";
+  let usageEventId = "";
   try {
     const user = await getUserFromBearer(request);
     if (!user) return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
 
     const usage = await consumeMonthlyUsage(user.id, "video_generation", 5);
     if (!usage.allowed) return NextResponse.json({ error: `今月の無料動画生成回数（${usage.limit}回）を使い切りました。Proへアップグレードしてください。`, usage }, { status: 429 });
+    usageEventId = usage.usage_event_id || "";
 
 
     const { data: job, error: jobError } = await admin.from("production_jobs").insert({
@@ -77,6 +79,23 @@ export async function POST(request: Request) {
         const { admin } = clients();
         await admin.from("production_jobs").update({ status: "failed", provider_response: { error: message }, completed_at: new Date().toISOString() }).eq("id", jobId);
       } catch {}
+    } else if (usageEventId) {
+      try {
+        const refund = await refundMonthlyUsage(user.id, "video_generation", usageEventId);
+        if (!refund.refunded) {
+          console.error("video generation quota refund was not applied", {
+            userId: user.id,
+            usageEventId,
+            reason: refund.reason,
+          });
+        }
+      } catch (refundError) {
+        console.error("video generation quota refund failed", {
+          userId: user.id,
+          usageEventId,
+          error: refundError,
+        });
+      }
     }
     return NextResponse.json({ error: message, jobId: jobId || undefined }, { status: 500 });
   }
