@@ -98,7 +98,8 @@ export async function GET(request: Request) {
   }
 
   const db = getAdminSupabase();
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const evaluationDelayHours = Math.max(6, Number(process.env.OPERATOR_EVALUATION_DELAY_HOURS || 12));
+  const cutoff = new Date(Date.now() - evaluationDelayHours * 60 * 60 * 1000).toISOString();
   const results: unknown[] = [];
 
   const { data: posts, error } = await db
@@ -125,7 +126,7 @@ export async function GET(request: Request) {
         .limit(1)
         .maybeSingle();
 
-      if (latestMetric?.measured_at && new Date(latestMetric.measured_at).getTime() > Date.now() - 23 * 60 * 60 * 1000) {
+      if (latestMetric?.measured_at && new Date(latestMetric.measured_at).getTime() > Date.now() - Math.max(6, evaluationDelayHours - 1) * 60 * 60 * 1000) {
         continue;
       }
 
