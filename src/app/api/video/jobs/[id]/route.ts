@@ -1,36 +1,17 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getAdminSupabase, getUserFromBearer } from "@/lib/billing";
 import { getHiggsfieldStatus, extractHiggsfieldVideoUrl } from "@/lib/video/higgsfield";
 import { saveVideoToStorage } from "@/lib/video/storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-function clients() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !anon || !serviceRole) throw new Error("Supabase configuration is incomplete.");
-  return {
-    auth: createClient(url, anon, { auth: { autoRefreshToken: false, persistSession: false } }),
-    admin: createClient(url, serviceRole, { auth: { autoRefreshToken: false, persistSession: false } })
-  };
-}
-
-async function authenticate(request: Request) {
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (!token) throw new Error("ログインが必要です。");
-  const { auth } = clients();
-  const { data, error } = await auth.auth.getUser(token);
-  if (error || !data.user) throw new Error("認証セッションが無効です。");
-  return data.user;
-}
-
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const user = await authenticate(request);
+    const user = await getUserFromBearer(request);
+    if (!user) return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
     const { id } = await context.params;
-    const { admin } = clients();
+    const admin = getAdminSupabase();
 
     const { data: job, error } = await admin.from("production_jobs")
       .select("id,user_id,social_post_id,creative_id,provider,model,status,request_id,prompt,duration,resolution,aspect_ratio,provider_response,error,started_at,completed_at,created_at,updated_at")
@@ -40,7 +21,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     if (!job) return NextResponse.json({ error: "production jobが見つかりません。" }, { status: 404 });
 
     if (job.status === "completed" || job.status === "failed") {
-      const { data: asset } = await admin.from("video_assets").select("id,video_url,storage_path,provider,model,duration,resolution,aspect_ratio,created_at").eq("production_job_id", job.id).maybeSingle();
+      const { data: asset } = await admin.from("video_assets")
+        .select("id,video_url,storage_path,provider,model,duration,resolution,aspect_ratio,created_at")
+        .eq("production_job_id", job.id).maybeSingle();
       return NextResponse.json({ ok: true, job, asset: asset ?? null });
     }
 
@@ -52,6 +35,20 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     if (status === "completed") {
       const videoUrl = extractHiggsfieldVideoUrl(result);
       if (!videoUrl) throw new Error("Higgsfield completed but video URL was not returned.");
+
+      const { data: existingAsset } = await admin.from("video_assets")
+        .select("id,video_url,storage_path,provider,model,duration,resolution,aspect_ratio,created_at")
+        .eq("production_job_id", job.id).maybeSingle();
+
+      if (existingAsset) {
+        await admin.from("production_jobs").update({
+          status: "completed",
+          provider_response: result,
+          completed_at: new Date().toISOString(),
+          error: null
+        }).eq("id", job.id).eq("user_id", user.id);
+        return NextResponse.json({ ok: true, job: { ...job, status: "completed" }, asset: existingAsset });
+      }
 
       const stored = await saveVideoToStorage({ userId: user.id, jobId: job.id, sourceUrl: videoUrl });
       const { data: asset, error: assetError } = await admin.from("video_assets").insert({
