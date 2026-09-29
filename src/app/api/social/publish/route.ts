@@ -36,6 +36,21 @@ export async function POST(request: Request) {
     if (sourceError) throw sourceError;
     if (!source) return NextResponse.json({ error: "対象のテスト投稿が見つかりません。" }, { status: 404 });
 
+    if (platforms.includes("tiktok")) {
+      const { data: tiktokConsent, error: tiktokConsentError } = await supabase
+        .from("tiktok_publish_consents")
+        .select("consented_at")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (tiktokConsentError) throw tiktokConsentError;
+      if (!tiktokConsent) {
+        return NextResponse.json({
+          error: "TikTok自動投稿には、先に明示的な公開同意が必要です。",
+          code: "TIKTOK_PUBLISH_CONSENT_REQUIRED",
+        }, { status: 403 });
+      }
+    }
+
     const results: Array<{platform:string;ok:boolean;postId?:string;url?:string;error?:string}> = [];
     let tempFile = "";
     let videoBuffer: Uint8Array | null = null;
