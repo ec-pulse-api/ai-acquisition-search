@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { consumeMonthlyUsage } from "@/lib/billing";
+import { consumeMonthlyUsage, getUserFromBearer } from "@/lib/billing";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -11,24 +11,15 @@ function clients() {
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !anon || !serviceRole) throw new Error("Supabase configuration is incomplete.");
   return {
-    auth: createClient(url, anon, { auth: { autoRefreshToken: false, persistSession: false } }),
     admin: createClient(url, serviceRole, { auth: { autoRefreshToken: false, persistSession: false } })
   };
-}
-
-async function authenticate(request: Request) {
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (!token) throw new Error("ログインが必要です。");
-  const { auth } = clients();
-  const { data, error } = await auth.auth.getUser(token);
-  if (error || !data.user) throw new Error("認証セッションが無効です。");
-  return data.user;
 }
 
 export async function POST(request: Request) {
   let jobId = "";
   try {
-    const user = await authenticate(request);
+    const user = await getUserFromBearer(request);
+    if (!user) return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
     const body = await request.json();
     const prompt = String(body.prompt || "").trim();
     if (!prompt) return NextResponse.json({ error: "prompt is required" }, { status: 400 });
