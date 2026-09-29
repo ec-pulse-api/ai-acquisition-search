@@ -1,65 +1,15 @@
-import { ImageResponse } from "next/og";
-
 const ICON_SIZE = 180;
 
 export const size = { width: ICON_SIZE, height: ICON_SIZE };
-export const contentType = "image/png";
+export const contentType = "image/svg+xml";
+
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#071d63"/><stop offset=".52" stop-color="#0042c8"/><stop offset="1" stop-color="#10d8c0"/></linearGradient></defs>
+<rect width="180" height="180" rx="40" fill="url(#g)"/>
+<text x="28" y="108" fill="#fff" font-family="Arial,sans-serif" font-size="40" font-weight="800">EC</text>
+<path d="M106 99 C116 102 122 104 129 103 L140 76 L149 112 L157 94 L168 94" fill="none" stroke="#11e5dc" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
 
 export default function AppleIcon() {
-  const s = ICON_SIZE;
-
-  return new ImageResponse(
-    <div
-      style={{
-        width: s,
-        height: s,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: s * 0.22,
-        background: "linear-gradient(135deg, #071d63 0%, #0042c8 52%, #10d8c0 100%)",
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: s * 0.82,
-          height: s * 0.62,
-          position: "relative",
-        }}
-      >
-        <div
-          style={{
-            color: "white",
-            fontSize: s * 0.22,
-            fontWeight: 800,
-            fontFamily: "Arial, sans-serif",
-            letterSpacing: "-0.08em",
-            lineHeight: 1,
-          }}
-        >
-          EC
-        </div>
-        <svg
-          width={s * 0.38}
-          height={s * 0.30}
-          viewBox="0 0 100 76"
-          style={{ position: "absolute", right: 0, top: s * 0.14 }}
-        >
-          <path
-            d="M8 47 C18 49 25 51 34 50 L49 22 L61 60 L72 44 L94 44"
-            fill="none"
-            stroke="#11e5dc"
-            strokeWidth="8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </div>
-    </div>,
-    { width: s, height: s },
-  );
+  return new Response(svg, { headers: { "Content-Type": "image/svg+xml; charset=utf-8" } });
 }

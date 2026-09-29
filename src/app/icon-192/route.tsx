@@ -1,64 +1,14 @@
-import { ImageResponse } from "next/og";
-
 const ICON_SIZE = 192;
 
 export const runtime = "nodejs";
 
-export function GET() {
-  const s = ICON_SIZE;
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#071d63"/><stop offset=".52" stop-color="#0042c8"/><stop offset="1" stop-color="#10d8c0"/></linearGradient></defs>
+<rect width="192" height="192" rx="42" fill="url(#g)"/>
+<text x="30" y="116" fill="#fff" font-family="Arial,sans-serif" font-size="42" font-weight="800">EC</text>
+<path d="M110 105 C120 108 126 110 133 109 L144 82 L153 118 L161 100 L173 100" fill="none" stroke="#11e5dc" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
 
-  return new ImageResponse(
-    <div
-      style={{
-        width: s,
-        height: s,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: s * 0.22,
-        background: "linear-gradient(135deg, #071d63 0%, #0042c8 52%, #10d8c0 100%)",
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: s * 0.82,
-          height: s * 0.62,
-          position: "relative",
-        }}
-      >
-        <div
-          style={{
-            color: "white",
-            fontSize: s * 0.22,
-            fontWeight: 800,
-            fontFamily: "Arial, sans-serif",
-            letterSpacing: "-0.08em",
-            lineHeight: 1,
-          }}
-        >
-          EC
-        </div>
-        <svg
-          width={s * 0.38}
-          height={s * 0.30}
-          viewBox="0 0 100 76"
-          style={{ position: "absolute", right: 0, top: s * 0.14 }}
-        >
-          <path
-            d="M8 47 C18 49 25 51 34 50 L49 22 L61 60 L72 44 L94 44"
-            fill="none"
-            stroke="#11e5dc"
-            strokeWidth="8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </div>
-    </div>,
-    { width: s, height: s },
-  );
+export function GET() {
+  return new Response(svg, { headers: { "Content-Type": "image/svg+xml; charset=utf-8" } });
 }

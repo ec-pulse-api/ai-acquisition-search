@@ -1,65 +1,15 @@
-import { ImageResponse } from "next/og";
-
 const ICON_SIZE = 512;
 
 export const size = { width: ICON_SIZE, height: ICON_SIZE };
-export const contentType = "image/png";
+export const contentType = "image/svg+xml";
+
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#071d63"/><stop offset=".52" stop-color="#0042c8"/><stop offset="1" stop-color="#10d8c0"/></linearGradient></defs>
+<rect width="512" height="512" rx="112" fill="url(#g)"/>
+<text x="78" y="306" fill="#fff" font-family="Arial,sans-serif" font-size="112" font-weight="800">EC</text>
+<path d="M302 278 C330 286 346 292 366 290 L398 214 L424 314 L450 262 L478 262" fill="none" stroke="#11e5dc" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
 
 export default function Icon() {
-  const s = ICON_SIZE;
-
-  return new ImageResponse(
-    <div
-      style={{
-        width: s,
-        height: s,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: s * 0.22,
-        background: "linear-gradient(135deg, #071d63 0%, #0042c8 52%, #10d8c0 100%)",
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: s * 0.82,
-          height: s * 0.62,
-          position: "relative",
-        }}
-      >
-        <div
-          style={{
-            color: "white",
-            fontSize: s * 0.22,
-            fontWeight: 800,
-            fontFamily: "Arial, sans-serif",
-            letterSpacing: "-0.08em",
-            lineHeight: 1,
-          }}
-        >
-          EC
-        </div>
-        <svg
-          width={s * 0.38}
-          height={s * 0.30}
-          viewBox="0 0 100 76"
-          style={{ position: "absolute", right: 0, top: s * 0.14 }}
-        >
-          <path
-            d="M8 47 C18 49 25 51 34 50 L49 22 L61 60 L72 44 L94 44"
-            fill="none"
-            stroke="#11e5dc"
-            strokeWidth="8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </div>
-    </div>,
-    { width: s, height: s },
-  );
+  return new Response(svg, { headers: { "Content-Type": "image/svg+xml; charset=utf-8" } });
 }
