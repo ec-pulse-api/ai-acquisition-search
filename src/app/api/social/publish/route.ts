@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       const { error } = await supabase.from("social_posts").insert({
         creative_id: source.creative_id, user_id: user.id, network,
         external_post_id: externalId, post_url: postUrl, published_at: new Date().toISOString(),
-        status: "published", caption, metadata: { sourceSocialPostId: socialPostId, ...metadata },
+        status: "published", caption, metadata: { source_social_post_id: socialPostId, ...metadata },
       });
       if (error) throw error;
     };
