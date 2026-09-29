@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { getAdminSupabase, getUserFromBearer } from "@/lib/billing";
 import { decryptLinkedInToken, getLinkedInMemberPostAnalytics } from "@/lib/linkedin";
+import { getTikTokVideoMetrics, resolveTikTokVideoId } from "@/lib/social/tiktok";
+import { getInstagramReelMetrics, getFacebookReelMetrics } from "@/lib/social/meta";
+import { getYouTubeVideoStatus } from "@/lib/social/youtube";
+import { getXPostMetrics } from "@/lib/social/x";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 type NormalizedMetrics = {
   impressions: number; views: number; likes: number; comments: number; shares: number;
@@ -21,6 +26,77 @@ function linkedinMetric(raw: any): NormalizedMetrics {
     shares: num(metric.RESHARE ?? metric.reshare),
     saves: num(metric.POST_SAVE ?? metric.postSave),
     clicks: num(metric.LINK_CLICKS ?? metric.linkClicks),
+    conversions: 0, revenue: 0, grossProfit: 0, adSpend: 0,
+  };
+}
+
+function tiktokMetric(raw: any): NormalizedMetrics {
+  const m = raw || {};
+  return {
+    impressions: 0,
+    views: num(m.view_count),
+    likes: num(m.like_count),
+    comments: num(m.comment_count),
+    shares: num(m.share_count),
+    saves: 0,
+    clicks: 0,
+    conversions: 0, revenue: 0, grossProfit: 0, adSpend: 0,
+  };
+}
+
+function instagramMetric(raw: any): NormalizedMetrics {
+  return {
+    impressions: num(raw?.impressions ?? raw?.reach),
+    views: num(raw?.views ?? raw?.plays ?? raw?.video_views),
+    likes: num(raw?.like_count),
+    comments: num(raw?.comments_count),
+    shares: num(raw?.shares),
+    saves: num(raw?.saved ?? raw?.saves),
+    clicks: 0,
+    conversions: 0, revenue: 0, grossProfit: 0, adSpend: 0,
+  };
+}
+
+function facebookMetric(raw: any): NormalizedMetrics {
+  const likes = raw?.likes?.summary?.total_count ?? raw?.likes?.data?.length ?? raw?.like_count;
+  const comments = raw?.comments?.summary?.total_count ?? raw?.comments?.data?.length ?? raw?.comment_count;
+  const shares = raw?.shares?.count ?? raw?.share_count;
+  return {
+    impressions: 0,
+    views: num(raw?.views ?? raw?.view_count),
+    likes: num(likes),
+    comments: num(comments),
+    shares: num(shares),
+    saves: 0,
+    clicks: 0,
+    conversions: 0, revenue: 0, grossProfit: 0, adSpend: 0,
+  };
+}
+
+function youtubeMetric(raw: any): NormalizedMetrics {
+  const s = raw?.statistics || {};
+  return {
+    impressions: 0,
+    views: num(s.viewCount),
+    likes: num(s.likeCount),
+    comments: num(s.commentCount),
+    shares: 0,
+    saves: 0,
+    clicks: 0,
+    conversions: 0, revenue: 0, grossProfit: 0, adSpend: 0,
+  };
+}
+
+function xMetric(raw: any): NormalizedMetrics {
+  const m = raw?.organicMetrics || raw?.publicMetrics || {};
+  return {
+    impressions: num(m.impression_count),
+    views: 0,
+    likes: num(m.like_count),
+    comments: num(m.reply_count),
+    shares: num(m.retweet_count ?? m.quote_count),
+    saves: num(m.bookmark_count),
+    clicks: 0,
     conversions: 0, revenue: 0, grossProfit: 0, adSpend: 0,
   };
 }
@@ -56,12 +132,24 @@ export async function POST(request: Request) {
         post.external_post_id,
       );
       normalized = linkedinMetric(raw);
+    } else if (post.network === "tiktok") {
+      const resolved = await resolveTikTokVideoId(post.external_post_id);
+      raw = await getTikTokVideoMetrics(resolved.videoId);
+      normalized = tiktokMetric(raw);
+    } else if (post.network === "instagram") {
+      raw = await getInstagramReelMetrics(post.external_post_id);
+      normalized = instagramMetric(raw);
+    } else if (post.network === "facebook") {
+      raw = await getFacebookReelMetrics(post.external_post_id);
+      normalized = facebookMetric(raw);
+    } else if (post.network === "youtube") {
+      raw = await getYouTubeVideoStatus(post.external_post_id);
+      normalized = youtubeMetric(raw);
+    } else if (post.network === "x") {
+      raw = await getXPostMetrics(post.external_post_id);
+      normalized = xMetric(raw);
     } else {
-      return NextResponse.json({
-        ok: false,
-        supported: ["linkedin"],
-        error: `${post.network} の自動実績取得は次のAPIアダプター追加が必要です。`,
-      }, { status: 501 });
+      return NextResponse.json({ ok: false, supported: ["linkedin","tiktok","instagram","facebook","youtube","x"], error: `${post.network} の自動実績取得は未対応です。` }, { status: 501 });
     }
 
     const ctr = normalized.impressions > 0 ? normalized.clicks / normalized.impressions : null;
