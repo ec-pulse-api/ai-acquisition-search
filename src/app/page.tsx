@@ -142,10 +142,10 @@ export default function Home() {
       const supabase = createClient(supabaseUrl, anonKey);
       const { data } = await supabase.auth.getSession();
       if (!data.session) throw new Error("先にGoogleでログインしてください。");
+      if (!socialPostId) throw new Error("先に「このテスト計画を保存」してください。");
       const saved = await fetch("/api/operator/metrics", { method:"POST", headers:{"Content-Type":"application/json",Authorization:`Bearer ${data.session.access_token}`}, body:JSON.stringify({...metrics, socialPostId}) });
       const body = await saved.json();
       if (!saved.ok) throw new Error(body.error || "実績保存に失敗しました。");
-      if (!socialPostId) throw new Error("先に「このテスト計画を保存」してください。");
       const decision = await fetch("/api/operator/decision", { method:"POST", headers:{"Content-Type":"application/json",Authorization:`Bearer ${data.session.access_token}`}, body:JSON.stringify({socialPostId}) });
       const verdictBody = await decision.json();
       if (!decision.ok) throw new Error(verdictBody.error || "判定に失敗しました。");
