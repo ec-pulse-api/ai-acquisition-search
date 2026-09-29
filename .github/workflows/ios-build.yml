@@ -54,10 +54,18 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             archive
 
+      - name: Verify iOS archive
+        run: |
+          set -euo pipefail
+          test -d "$RUNNER_TEMP/AIAcquisitionSearch.xcarchive"
+          test -f "$RUNNER_TEMP/AIAcquisitionSearch.xcarchive/Info.plist"
+          echo "Archive verified:"
+          du -sh "$RUNNER_TEMP/AIAcquisitionSearch.xcarchive"
+
       - name: Upload iOS archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ai-acquisition-search-ios-archive
-          path: \${{ runner.temp }}/AIAcquisitionSearch.xcarchive
+          path: ${{ runner.temp }}/AIAcquisitionSearch.xcarchive
           if-no-files-found: error
           retention-days: 14
