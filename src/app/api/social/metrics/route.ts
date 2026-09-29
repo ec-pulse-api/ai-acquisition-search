@@ -152,7 +152,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, supported: ["linkedin","tiktok","instagram","facebook","youtube","x"], error: `${post.network} の自動実績取得は未対応です。` }, { status: 501 });
     }
 
-    const ctr = normalized.impressions > 0 ? normalized.clicks / normalized.impressions : null;
+    // CTRは「クリック指標を取得できること」が確認できた媒体だけ計算する。
+    // TikTok/Instagram/Facebook/YouTube/Xでは現在クリックを取得していないため、
+    // clicks=0 を実測CTR 0% と解釈させない。
+    const clickMetricAvailable = post.network === "linkedin"
+      ? (() => {
+          const metric = Array.isArray((raw as any)?.elements)
+            ? ((raw as any)?.elements?.[0]?.total || (raw as any)?.elements?.[0] || {})
+            : ((raw as any)?.total || (raw as any) || {});
+          return Object.prototype.hasOwnProperty.call(metric, "LINK_CLICKS")
+            || Object.prototype.hasOwnProperty.call(metric, "linkClicks");
+        })()
+      : false;
+    const ctr = clickMetricAvailable && normalized.impressions > 0
+      ? normalized.clicks / normalized.impressions
+      : null;
     const cvr = normalized.clicks > 0 ? normalized.conversions / normalized.clicks : null;
     const { data: metric, error: metricError } = await db.from("post_metrics").insert({
       social_post_id: post.id, ...normalized, ctr, cvr, cpa: null, roas: null,
