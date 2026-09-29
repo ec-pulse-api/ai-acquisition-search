@@ -216,8 +216,8 @@ export async function POST(request: Request) {
       // このリクエストで作った行だけをロールバックする。
       if (jobId) await db.from("production_jobs").delete().eq("id", jobId).eq("user_id", userId);
       if (operatorRunId) await db.from("operator_runs").delete().eq("id", operatorRunId).eq("user_id", userId);
-      if (nextPostId) await db.from("social_posts").delete().eq("id", nextPostId).eq("user_id", user.id);
-      if (nextCreativeId) await db.from("creatives").delete().eq("id", nextCreativeId).eq("user_id", user.id);
+      if (nextPostId) await db.from("social_posts").delete().eq("id", nextPostId).eq("user_id", userId);
+      if (nextCreativeId) await db.from("creatives").delete().eq("id", nextCreativeId).eq("user_id", userId);
     } catch (cleanupError) {
       console.error("next creative rollback failed", cleanupError);
     }
