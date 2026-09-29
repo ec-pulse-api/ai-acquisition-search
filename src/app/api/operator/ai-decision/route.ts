@@ -5,12 +5,37 @@ export const runtime = "nodejs";
 
 type Verdict = "continue" | "pivot" | "stop";
 
-const fallbackDecision = (m: any): { verdict: Verdict; reason: string; nextAction: string } => {
+const fallbackDecision = (m: any, network: string): { verdict: Verdict; reason: string; nextAction: string } => {
   const roas = m?.roas == null ? null : Number(m.roas);
   const ctr = m?.ctr == null ? null : Number(m.ctr);
+  const cvr = m?.cvr == null ? null : Number(m.cvr);
+  const cpa = m?.cpa == null ? null : Number(m.cpa);
+  const impressions = Number(m?.impressions || 0);
+  const views = Number(m?.views || 0);
+  const clicks = Number(m?.clicks || 0);
+  const conversions = Number(m?.conversions || 0);
+  const revenue = Number(m?.revenue || 0);
+  const adSpend = Number(m?.ad_spend || 0);
+
+  // SNS APIではクリック・売上が取得できない媒体がある。
+  // その場合、0を「実際に0だった」と解釈してSTOPにしない。
+  const raw = m?.raw && typeof m.raw === "object" ? m.raw : {};
+  const manuallyMeasured = !raw.source || raw.source === "manual";
+  const clickSignalKnown = manuallyMeasured || network === "linkedin" || clicks > 0 || cvr != null;
+  const revenueSignalKnown = manuallyMeasured || roas != null || cpa != null || cvr != null || conversions > 0 || revenue > 0 || adSpend > 0;
+
   if (roas != null && roas >= 2) return { verdict: "continue", reason: "ROASが2.0以上です。現在の訴求を維持しながら新しいクリエイティブを追加テストします。", nextAction: "同じ訴求でHookを変更した広告を2案テストする" };
-  if (ctr != null && ctr >= 0.02) return { verdict: "pivot", reason: "クリック反応は確認できています。訴求またはHookを変更して再テストします。", nextAction: "訴求とHookを変更した広告をテストする" };
-  return { verdict: "stop", reason: "現時点の反応が弱いため、別セグメントまたは別訴求をテストします。", nextAction: "別の顧客セグメントまたは訴求でテストする" };
+  if (ctr != null && ctr >= 0.02 && clickSignalKnown) return { verdict: "pivot", reason: "クリック反応は確認できています。訴求またはHookを変更して再テストします。", nextAction: "訴求とHookを変更した広告をテストする" };
+
+  if (!revenueSignalKnown && !clickSignalKnown) {
+    const observed = views > 0 ? "再生数" + views.toLocaleString() + "件" : impressions > 0 ? "インプレッション" + impressions.toLocaleString() + "件" : "SNSの基本指標";
+    return { verdict: "pivot", reason: network + "では売上・クリックが自動取得できていないため、現時点でSTOPとは判定しません。" + observed + "を基準に次の仮説をテストします。", nextAction: "同じ商品でHookまたは訴求を1つだけ変更して再テストし、クリック・購入データを追加取得する" };
+  }
+
+  if (ctr != null && ctr < 0.02 && clickSignalKnown) return { verdict: "stop", reason: "クリック反応が設定した基準を下回っています。現在のHook・訴求は継続せず、別仮説をテストします。", nextAction: "別の顧客セグメントまたは訴求でテストする" };
+  if (cvr != null && cvr <= 0 && conversions === 0 && clicks > 0) return { verdict: "pivot", reason: "クリックは発生していますが購入・CVが確認できていません。広告から遷移後の訴求を変更して再テストします。", nextAction: "広告HookではなくLP・オファーとの接続を変更して再テストする" };
+
+  return { verdict: "pivot", reason: "現時点では継続・停止を断定できるだけの成果データが不足しています。", nextAction: "変更点を1つに絞って次のクリエイティブをテストする" };
 };
 
 export async function POST(request: Request) {
@@ -32,12 +57,12 @@ export async function POST(request: Request) {
     if (creativeError) throw creativeError;
 
     const { data: metric, error: metricError } = await db.from("post_metrics")
-      .select("impressions,views,likes,comments,shares,saves,clicks,conversions,revenue,gross_profit,ad_spend,ctr,cvr,cpa,roas,measured_at")
+      .select("impressions,views,likes,comments,shares,saves,clicks,conversions,revenue,gross_profit,ad_spend,ctr,cvr,cpa,roas,raw,measured_at")
       .eq("social_post_id", post.id).order("measured_at", { ascending: false }).limit(1).maybeSingle();
     if (metricError) throw metricError;
     if (!metric) return NextResponse.json({ error: "先に実績を取得してください。" }, { status: 400 });
 
-    const fallback = fallbackDecision(metric);
+    const fallback = fallbackDecision(metric, post.network);
     let decision = fallback;
     let aiConnected = false;
 
