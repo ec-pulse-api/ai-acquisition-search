@@ -103,8 +103,7 @@ export async function POST(request: Request) {
               Number(metric.clicks || 0) > 0 ||
               Number(metric.conversions || 0) > 0 ||
               Number(metric.revenue || 0) > 0 ||
-              Number(metric.ad_spend || 0) > 0 ||
-              post.network === "linkedin";
+              Number(metric.ad_spend || 0) > 0;
 
             decision = {
               verdict: !hasObservedDecisionSignal && parsed.verdict === "stop" ? fallback.verdict : parsed.verdict,
