@@ -171,7 +171,6 @@ APIキーはサーバー側だけで管理し、Gitにコミットしません�
 
 「Acquisition」は企業買収ではなく、**Customer Acquisition（顧客獲得・集客）**を意味します。
 
-
 ## TikTok自動投稿
 
 TikTokは公式Content Posting APIのDirect Postを使います。投稿にはTikTok側のアプリ登録、Content Posting API、認可済みユーザーの `video.publish` 権限が必要です。未監査クライアントの投稿はTikTokの仕様上、テスト中は非公開に制限される場合があります。
@@ -191,3 +190,7 @@ MCPツール:
 動画URL方式を使う場合、TikTokから取得可能なHTTPS公開URLが必要です。AI生成動画は `is_aigc=true` を既定値として送信します。
 
 次のSNSも同じ構造で公式APIを接続します。YouTubeは `videos.insert` によるアップロードが公式に提供されています。
+
+## Deployment
+
+Production deployment is driven from the `main` branch through the connected Vercel project.
