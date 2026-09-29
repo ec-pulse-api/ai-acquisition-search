@@ -47,42 +47,125 @@ export async function POST(request: Request) {
       if (!videoBuffer.byteLength) throw new Error("完成動画が空です。");
       return videoBuffer;
     };
-    const save = async (network: Platform, externalId: string | null, postUrl: string | null, metadata: Record<string,unknown> = {}) => {
-      const { error } = await supabase.from("social_posts").insert({
-        creative_id: source.creative_id, user_id: user.id, network,
-        external_post_id: externalId, post_url: postUrl, published_at: new Date().toISOString(),
-        status: "published", caption, metadata: { source_social_post_id: socialPostId, ...metadata },
-      });
-      if (error) throw error;
+
+    // Reserve one publishing row per (source post, network) BEFORE calling the external API.
+    // This prevents two workers from publishing the same creative to the same network concurrently.
+    // A row left in "publishing" after a process crash is deliberately not auto-retried,
+    // because retrying without provider-side idempotency could create a duplicate external post.
+    const reserve = async (network: Platform) => {
+      const metadata = { source_social_post_id: socialPostId };
+      const { data, error } = await supabase.from("social_posts").insert({
+        creative_id: source.creative_id,
+        user_id: user.id,
+        network,
+        external_post_id: null,
+        post_url: null,
+        published_at: null,
+        status: "publishing",
+        caption,
+        metadata,
+      }).select("id,status,external_post_id,post_url").single();
+
+      if (!error && data) return { claimed: true, row: data };
+
+      if (error?.code !== "23505") throw error;
+
+      const { data: existing, error: existingError } = await supabase.from("social_posts")
+        .select("id,status,external_post_id,post_url")
+        .eq("user_id", user.id)
+        .eq("network", network)
+        .filter("metadata->>source_social_post_id", "eq", socialPostId)
+        .maybeSingle();
+      if (existingError) throw existingError;
+      if (!existing) throw new Error("SNS投稿の重複予約を確認できませんでした。");
+
+      if (existing.status === "published") return { claimed: false, row: existing };
+      if (existing.status === "publishing") return { claimed: false, row: existing };
+
+      const { data: reclaimed, error: reclaimError } = await supabase.from("social_posts")
+        .update({ status: "publishing", error: null, published_at: null, updated_at: new Date().toISOString() })
+        .eq("id", existing.id)
+        .eq("user_id", user.id)
+        .eq("status", "failed")
+        .select("id,status,external_post_id,post_url")
+        .maybeSingle();
+      if (reclaimError) throw reclaimError;
+      return reclaimed
+        ? { claimed: true, row: reclaimed }
+        : { claimed: false, row: existing };
+    };
+
+    const complete = async (rowId: string, network: Platform, externalId: string | null, postUrl: string | null, metadata: Record<string,unknown> = {}) => {
+      const { data, error } = await supabase.from("social_posts").update({
+        external_post_id: externalId,
+        post_url: postUrl,
+        published_at: new Date().toISOString(),
+        status: "published",
+        error: null,
+        metadata: { source_social_post_id: socialPostId, ...metadata },
+        updated_at: new Date().toISOString(),
+      }).eq("id", rowId).eq("user_id", user.id).eq("network", network).eq("status", "publishing")
+        .select("id,external_post_id,post_url").single();
+      if (error || !data) throw error || new Error("SNS投稿結果の保存に失敗しました。");
+      return data;
+    };
+
+    const fail = async (rowId: string, message: string) => {
+      await supabase.from("social_posts").update({
+        status: "failed",
+        error: message,
+        updated_at: new Date().toISOString(),
+      }).eq("id", rowId).eq("user_id", user.id).eq("status", "publishing");
     };
 
     try {
       for (const platform of platforms) {
+        let reservation: Awaited<ReturnType<typeof reserve>> | null = null;
         try {
+          reservation = await reserve(platform);
+          if (!reservation.claimed) {
+            if (reservation.row.status === "published") {
+              results.push({
+                platform,
+                ok: true,
+                postId: reservation.row.external_post_id ?? undefined,
+                url: reservation.row.post_url ?? undefined,
+              });
+            } else {
+              results.push({
+                platform,
+                ok: false,
+                error: "この投稿先は別の処理で予約済みです。外部SNSへの二重投稿を避けるため再実行しません。",
+              });
+            }
+            continue;
+          }
+
+          const rowId = reservation.row.id;
           if (platform === "tiktok") {
             const r = await publishTikTokVideo({videoUrl,title:caption,isAigc:true});
-            await save(platform,r.publishId,null,{publishId:r.publishId});
-            results.push({platform,ok:true,postId:r.publishId});
+            const saved = await complete(rowId,platform,r.publishId,null,{publishId:r.publishId});
+            results.push({platform,ok:true,postId:saved.external_post_id ?? r.publishId});
           } else if (platform === "instagram") {
             const r = await publishInstagramReel({videoUrl,caption});
-            await save(platform,r.mediaId,null,r);
-            results.push({platform,ok:true,postId:r.mediaId});
+            const saved = await complete(rowId,platform,r.mediaId,null,r);
+            results.push({platform,ok:true,postId:saved.external_post_id ?? r.mediaId});
           } else if (platform === "facebook") {
             const r = await publishFacebookReel({videoUrl,caption});
-            await save(platform,r.videoId,null,r);
-            results.push({platform,ok:true,postId:r.videoId});
+            const saved = await complete(rowId,platform,r.videoId,null,r);
+            results.push({platform,ok:true,postId:saved.external_post_id ?? r.videoId});
           } else if (platform === "youtube") {
             const response = await fetch(videoUrl);
             if (!response.ok) throw new Error(`動画取得失敗: HTTP ${response.status}`);
             tempFile = path.join(os.tmpdir(),`ai-acquisition-${source.id}.mp4`);
             await writeFile(tempFile,Buffer.from(await response.arrayBuffer()));
             const r = await uploadYouTubeVideo({filePath:tempFile,title:caption,description:caption,privacyStatus:"public",containsSyntheticMedia:true});
-            await save(platform,r.videoId,r.url,r);
-            results.push({platform,ok:true,postId:r.videoId,url:r.url ?? undefined});
+            const saved = await complete(rowId,platform,r.videoId,r.url,r);
+            results.push({platform,ok:true,postId:saved.external_post_id ?? r.videoId,url:saved.post_url ?? r.url ?? undefined});
           } else if (platform === "x") {
             const r = await publishXPost({text:caption.slice(0,280),video:await getVideoBuffer()});
-            await save(platform,r.postId,r.url,r);
-            results.push({platform,ok:true,postId:r.postId,url:r.url});
+            const saved = await complete(rowId,platform,r.postId,r.url,r);
+            results.push({platform,ok:true,postId:saved.external_post_id ?? r.postId,url:saved.post_url ?? r.url});
           } else {
             const {data: account,error} = await supabase.from("linkedin_accounts")
               .select("linkedin_sub,access_token_encrypted,expires_at").eq("user_id",user.id).maybeSingle();
@@ -91,11 +174,13 @@ export async function POST(request: Request) {
             if (account.expires_at && new Date(account.expires_at).getTime() <= Date.now()) throw new Error("LinkedInアクセストークンの有効期限が切れています。");
             const r = await createLinkedInVideoPost(decryptLinkedInToken(account.access_token_encrypted),"urn:li:person:"+account.linkedin_sub,caption,await getVideoBuffer());
             const url = r.id ? "https://www.linkedin.com/feed/update/"+r.id : null;
-            await save(platform,r.id,url,{postUrn:r.id,videoUrn:r.videoUrn});
-            results.push({platform,ok:true,postId:r.id ?? undefined,url:url ?? undefined});
+            const saved = await complete(rowId,platform,r.id,url,{postUrn:r.id,videoUrn:r.videoUrn});
+            results.push({platform,ok:true,postId:saved.external_post_id ?? undefined,url:saved.post_url ?? undefined});
           }
         } catch (e) {
-          results.push({platform,ok:false,error:e instanceof Error ? e.message : String(e)});
+          const message = e instanceof Error ? e.message : String(e);
+          if (reservation?.claimed) await fail(reservation.row.id, message);
+          results.push({platform,ok:false,error:message});
         }
       }
     } finally {
