@@ -11,6 +11,8 @@
     "mcp": "tsx src/mcp/server.ts"
   },
   "dependencies": {
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
     "@modelcontextprotocol/server": "^2.1.0",
     "@supabase/supabase-js": "^2.117.2",
     "next": "16.3.6",
@@ -19,6 +21,7 @@
     "zod": "^4.2.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
