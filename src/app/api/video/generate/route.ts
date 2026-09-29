@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { consumeMonthlyUsage } from "@/lib/billing";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -39,6 +40,8 @@ export async function POST(request: Request) {
     const generateAudio = Boolean(body.generateAudio ?? false);
     const socialPostId = body.socialPostId ? String(body.socialPostId) : null;
     const { admin } = clients();
+    const usage = await consumeMonthlyUsage(user.id, "video_generation", 5);
+    if (!usage.allowed) return NextResponse.json({ error: `今月の無料動画生成回数（${usage.limit}回）を使い切りました。Proへアップグレードしてください。`, usage }, { status: 429 });
 
     let creativeId: string | null = null;
     if (socialPostId) {
