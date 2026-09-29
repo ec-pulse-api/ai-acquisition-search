@@ -11,7 +11,9 @@
     "mcp": "tsx src/mcp/server.ts",
     "mobile:android:add": "cap add android",
     "mobile:android:sync": "cap sync android",
-    "mobile:android:build": "cd android && ./gradlew bundleRelease"
+    "mobile:android:build": "cd android && ./gradlew bundleRelease",
+    "mobile:ios:add": "cap add ios --packagemanager SPM",
+    "mobile:ios:sync": "cap sync ios"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.1.0",
