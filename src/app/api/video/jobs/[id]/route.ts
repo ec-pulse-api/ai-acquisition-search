@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminSupabase, getUserFromBearer } from "@/lib/billing";
 import { getHiggsfieldStatus, extractHiggsfieldVideoUrl } from "@/lib/video/higgsfield";
-import { saveVideoToStorage } from "@/lib/video/storage";
+import { deleteVideoFromStorage, saveVideoToStorage } from "@/lib/video/storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -67,7 +67,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         aspect_ratio: job.aspect_ratio,
         metadata: { bytes: stored.bytes, contentType: stored.contentType, requestId: job.request_id }
       }).select("id,video_url,storage_path,provider,model,duration,resolution,aspect_ratio,created_at").single();
+
       if (assetError?.code === "23505") {
+        // Another poller already created the DB row. The Storage path is deterministic
+        // and shared by the job, so do not delete it here.
         const { data: concurrentAsset, error: concurrentAssetError } = await admin.from("video_assets")
           .select("id,video_url,storage_path,provider,model,duration,resolution,aspect_ratio,created_at")
           .eq("production_job_id", job.id)
@@ -83,7 +86,22 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         }).eq("id", job.id).eq("user_id", user.id);
         return NextResponse.json({ ok: true, job: { ...job, status: "completed" }, asset: concurrentAsset });
       }
-      if (assetError || !asset) throw new Error(assetError?.message || "video assetの保存に失敗しました。");
+
+      if (assetError || !asset) {
+        // No DB row references this upload, so remove the deterministic Storage object.
+        // Never perform this cleanup on 23505: the competing transaction may already
+        // reference the same object.
+        try {
+          await deleteVideoFromStorage(stored.path);
+        } catch (cleanupError) {
+          console.error("video storage cleanup failed after asset insert error", {
+            jobId: job.id,
+            path: stored.path,
+            error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          });
+        }
+        throw new Error(assetError?.message || "video assetの保存に失敗しました。");
+      }
 
       if (job.creative_id) {
         await admin.from("creatives").update({
