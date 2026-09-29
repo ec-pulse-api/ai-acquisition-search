@@ -3,7 +3,7 @@ import { publishTikTokVideo } from "@/lib/social/tiktok";
 import { publishInstagramReel, publishFacebookReel } from "@/lib/social/meta";
 import { uploadYouTubeVideo } from "@/lib/social/youtube";
 import { publishXPost } from "@/lib/social/x";
-import { createLinkedInPost, createLinkedInVideoPost, decryptLinkedInToken } from "@/lib/linkedin";
+import { createLinkedInVideoPost, decryptLinkedInToken } from "@/lib/linkedin";
 import { getAdminSupabase, getUserFromBearer } from "@/lib/billing";
 import { writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
