@@ -185,7 +185,9 @@ export default function Home() {
 
       setHistoryLoading(true);
       try {
+        const historyToken = await getAccessToken();
         const historyResponse = await fetch("/api/ec-pulse-research/history?url=" + encodeURIComponent(url) + "&limit=8", {
+          headers: { Authorization: `Bearer ${historyToken}` },
           cache: "no-store"
         });
         const historyData = await historyResponse.json().catch(() => ({}));
