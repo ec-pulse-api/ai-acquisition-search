@@ -5,6 +5,7 @@ import { uploadYouTubeVideo } from "@/lib/social/youtube";
 import { publishXPost } from "@/lib/social/x";
 import { createLinkedInVideoPost, decryptLinkedInToken } from "@/lib/linkedin";
 import { getAdminSupabase, getUserFromBearer } from "@/lib/billing";
+import { assertPublicUrl, fetchPublicUrl } from "@/lib/security/public-url";
 import { writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -27,6 +28,11 @@ export async function POST(request: Request) {
       : [];
     if (!socialPostId) return NextResponse.json({ error: "socialPostIdが必要です。" }, { status: 400 });
     if (!videoUrl.startsWith("https://")) return NextResponse.json({ error: "完成動画のHTTPS URLが必要です。" }, { status: 400 });
+    try {
+      await assertPublicUrl(videoUrl, ["https:"]);
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : "動画URLを検証できませんでした。" }, { status: 400 });
+    }
     if (!caption) return NextResponse.json({ error: "投稿本文が必要です。" }, { status: 400 });
     if (!platforms.length) return NextResponse.json({ error: "投稿先を1つ以上選択してください。" }, { status: 400 });
 
@@ -56,7 +62,7 @@ export async function POST(request: Request) {
     let videoBuffer: Uint8Array | null = null;
     const getVideoBuffer = async () => {
       if (videoBuffer) return videoBuffer;
-      const response = await fetch(videoUrl);
+      const response = await fetchPublicUrl(videoUrl);
       if (!response.ok) throw new Error(`動画取得失敗: HTTP ${response.status}`);
       videoBuffer = new Uint8Array(await response.arrayBuffer());
       if (!videoBuffer.byteLength) throw new Error("完成動画が空です。");
@@ -178,7 +184,7 @@ export async function POST(request: Request) {
             const saved = await complete(rowId,platform,r.videoId,null,r);
             results.push({platform,ok:true,postId:saved.external_post_id ?? r.videoId});
           } else if (platform === "youtube") {
-            const response = await fetch(videoUrl);
+            const response = await fetchPublicUrl(videoUrl);
             if (!response.ok) throw new Error(`動画取得失敗: HTTP ${response.status}`);
             tempFile = path.join(os.tmpdir(),`ai-acquisition-${source.id}.mp4`);
             await writeFile(tempFile,Buffer.from(await response.arrayBuffer()));
