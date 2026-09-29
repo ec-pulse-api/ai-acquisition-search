@@ -38,12 +38,36 @@ export async function POST(request: Request) {
       autoGenerate?: boolean;
     };
     if (!body.socialPostId) return NextResponse.json({ error: "socialPostIdが必要です。" }, { status: 400 });
+    if (body.verdict === "stop") {
+      return NextResponse.json({ error: "STOP判定では次Creativeを自動生成しません。" }, { status: 409 });
+    }
 
     const db = getAdminSupabase();
     const { data: post, error: postError } = await db.from("social_posts")
-      .select("id,user_id,creative_id,network,caption").eq("id", body.socialPostId).eq("user_id", user.id).maybeSingle();
+      .select("id,user_id,creative_id,network,caption,metadata").eq("id", body.socialPostId).eq("user_id", user.id).maybeSingle();
     if (postError) throw postError;
     if (!post) return NextResponse.json({ error: "対象投稿が見つかりません。" }, { status: 404 });
+
+    const { data: existingPosts } = await db.from("social_posts")
+      .select("id,creative_id,network,status,metadata")
+      .eq("user_id", user.id)
+      .eq("metadata->>source_social_post_id", post.id)
+      .limit(1);
+    if (existingPosts?.[0]) {
+      const existingPost = existingPosts[0];
+      const { data: existingJob } = await db.from("production_jobs")
+        .select("id,status,request_id").eq("social_post_id", existingPost.id).eq("user_id", user.id)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const { data: existingCreative } = await db.from("creatives")
+        .select("id,title,hook,scenario").eq("id", existingPost.creative_id).eq("user_id", user.id).maybeSingle();
+      return NextResponse.json({
+        ok: true,
+        reused: true,
+        creative: existingCreative,
+        socialPost: existingPost,
+        video: existingJob ? { jobId: existingJob.id, requestId: existingJob.request_id, status: existingJob.status } : null,
+      });
+    }
 
     const { data: creative, error: creativeError } = await db.from("creatives")
       .select("id,product_id,plan_id,title,variation,hook,scenario,generation_provider,generation_model")
@@ -93,15 +117,16 @@ export async function POST(request: Request) {
       user_id: user.id,
       network: post.network,
       status: "scheduled",
-      caption: post.caption,
+      caption: post.caption || hook,
       metadata: {
         source_social_post_id: post.id,
         source_creative_id: creative.id,
         operator_verdict: verdict,
         iteration_angle: angle,
-        test_metric: body.testMetric || "CTR / CVR / ROAS"
+        test_metric: body.testMetric || "CTR / CVR / ROAS",
+        auto_publish: true,
       }
-    }).select("id,network,status").single();
+    }).select("id,network,status,caption,metadata").single();
     if (nextPostError || !nextPost) throw new Error(nextPostError?.message || "次の投稿レコード作成に失敗しました。");
 
     let video = null;
@@ -163,13 +188,7 @@ export async function POST(request: Request) {
     }).select("id").single();
     if (runError) throw runError;
 
-    return NextResponse.json({
-      ok: true,
-      runId: run.id,
-      creative: nextCreative,
-      socialPost: nextPost,
-      video
-    }, { status: 201 });
+    return NextResponse.json({ ok: true, runId: run.id, creative: nextCreative, socialPost: nextPost, video }, { status: 201 });
   } catch (error) {
     if (jobId) {
       try {
