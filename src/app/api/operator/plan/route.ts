@@ -85,7 +85,7 @@ export async function POST(request: Request) {
     }).select("id").single();
     if (runError) throw runError;
 
-    return NextResponse.json({ ok: true, planId: plan.id, runId: run.id, message: "広告テスト仮説を保存しました。結果を入力すると次のテストにつなげられます。" });
+    return NextResponse.json({ ok: true, planId: plan.id, runId: run.id, socialPostId: socialPost.id, message: "広告テスト仮説を保存しました。結果を入力すると次のテストにつなげられます。" });
   } catch (error) {
     console.error("operator plan error", error);
     return NextResponse.json({ error: "テスト計画の保存に失敗しました。" }, { status: 500 });
