@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { consumeMonthlyUsage, getUserFromBearer } from "@/lib/billing";
 import { analyzePage } from "@/lib/acquisition/analyze";
 import { fetchPageSnapshot } from "@/lib/acquisition/fetch-url";
 import { discoverAcquisitionSignals, searchWeb } from "@/lib/acquisition/search-web";
@@ -76,6 +77,10 @@ async function buildSource(inputUrl: string): Promise<PageSnapshot> {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getUserFromBearer(request);
+    if (!user) return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
+    const usage = await consumeMonthlyUsage(user.id, "acquisition_analysis", 5);
+    if (!usage.allowed) return NextResponse.json({ error: `今月の無料分析回数（${usage.limit}回）を使い切りました。Proへアップグレードしてください。`, usage }, { status: 429 });
     const body = await request.json();
     const url = typeof body?.url === "string" ? body.url.trim() : "";
     if (!url) {
