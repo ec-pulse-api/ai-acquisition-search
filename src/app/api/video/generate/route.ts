@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     if (jobId) {
       try {
         const { admin } = clients();
-        await admin.from("production_jobs").update({ status: "failed", error: message, completed_at: new Date().toISOString() }).eq("id", jobId);
+        await admin.from("production_jobs").update({ status: "failed", provider_response: { error: message }, completed_at: new Date().toISOString() }).eq("id", jobId);
       } catch {}
     }
     return NextResponse.json({ error: message, jobId: jobId || undefined }, { status: 500 });
