@@ -37,7 +37,16 @@ export async function POST(request: Request) {
     if (!source) return NextResponse.json({ error: "対象のテスト投稿が見つかりません。" }, { status: 404 });
 
     const results: Array<{platform:string;ok:boolean;postId?:string;url?:string;error?:string}> = [];
-    let tempFile = "";\n    let videoBuffer: Uint8Array | null = null;\n    const getVideoBuffer = async () => {\n      if (videoBuffer) return videoBuffer;\n      const response = await fetch(videoUrl);\n      if (!response.ok) throw new Error(`動画取得失敗: HTTP ${response.status}`);\n      videoBuffer = new Uint8Array(await response.arrayBuffer());\n      if (!videoBuffer.byteLength) throw new Error("完成動画が空です。");\n      return videoBuffer;\n    };
+    let tempFile = "";
+    let videoBuffer: Uint8Array | null = null;
+    const getVideoBuffer = async () => {
+      if (videoBuffer) return videoBuffer;
+      const response = await fetch(videoUrl);
+      if (!response.ok) throw new Error(`動画取得失敗: HTTP ${response.status}`);
+      videoBuffer = new Uint8Array(await response.arrayBuffer());
+      if (!videoBuffer.byteLength) throw new Error("完成動画が空です。");
+      return videoBuffer;
+    };
     const save = async (network: Platform, externalId: string | null, postUrl: string | null, metadata: Record<string,unknown> = {}) => {
       const { error } = await supabase.from("social_posts").insert({
         creative_id: source.creative_id, user_id: user.id, network,
