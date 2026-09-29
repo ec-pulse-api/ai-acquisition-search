@@ -32,6 +32,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const prompt = String(body.prompt || "").trim();
     if (!prompt) return NextResponse.json({ error: "prompt is required" }, { status: 400 });
+    if (prompt.length > 10000) return NextResponse.json({ error: "prompt is too long" }, { status: 400 });
 
     const model = body.model ? String(body.model) : undefined;
     const duration = Number(body.duration ?? 5);
@@ -40,7 +41,6 @@ export async function POST(request: Request) {
     const generateAudio = Boolean(body.generateAudio ?? false);
     const socialPostId = body.socialPostId ? String(body.socialPostId) : null;
     const { admin } = clients();
-    const usage = await consumeMonthlyUsage(user.id, "video_generation", 5);
     if (!usage.allowed) return NextResponse.json({ error: `今月の無料動画生成回数（${usage.limit}回）を使い切りました。Proへアップグレードしてください。`, usage }, { status: 429 });
 
     let creativeId: string | null = null;
@@ -49,6 +49,12 @@ export async function POST(request: Request) {
       if (error) throw new Error(error.message);
       if (!post) throw new Error("指定されたsocial postが見つかりません。");
       creativeId = post.creative_id;
+    }
+
+    const usage = await consumeMonthlyUsage(user.id, "video_generation", 5);
+    if (!usage.allowed) return NextResponse.json({ error: `今月の無料動画生成回数（${usage.limit}回）を使い切りました。Proへアップグレードしてください。`, usage }, { status: 429 });
+
+    if (socialPostId) {
     }
 
     const { data: job, error: jobError } = await admin.from("production_jobs").insert({
