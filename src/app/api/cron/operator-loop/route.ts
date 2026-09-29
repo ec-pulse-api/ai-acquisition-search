@@ -184,7 +184,7 @@ export async function GET(request: Request) {
 
   // Higgsfieldの未完了ジョブを回収し、完成したらそのままSNSへ投稿する。
   const { data: jobs } = await db.from("production_jobs")
-    .select("id,user_id,social_post_id,status,request_id,prompt,duration,resolution,aspect_ratio,model,provider_response,error,created_at")
+    .select("id,user_id,social_post_id,status,request_id,prompt,duration,resolution,aspect_ratio,model,provider_response,error,created_at,started_at")
     .in("status", ["queued","running","failed"])
     .order("created_at", { ascending: true })
     .limit(30);
@@ -192,44 +192,65 @@ export async function GET(request: Request) {
   for (const job of jobs || []) {
     if (!job.user_id) continue;
 
+    let claimed = false;
     try {
       const providerResponse = (job.provider_response && typeof job.provider_response === "object")
         ? job.provider_response as Record<string, unknown>
         : {};
       const retryCount = Number(providerResponse.retry_count || 0);
 
-      // 失敗Jobは最大2回まで自動再試行する。
-      if (job.status === "failed") {
-        if (retryCount >= 2) {
+      // 旧実行が外部API呼び出し前に落ちた場合の回収。
+      if (job.status === "running" && !job.request_id) {
+        const startedAt = job.started_at ? new Date(job.started_at).getTime() : 0;
+        if (startedAt && startedAt < Date.now() - 15 * 60 * 1000) {
+          await db.from("production_jobs")
+            .update({
+              status: "failed",
+              error: "Higgsfield開始前にworkerがタイムアウトした可能性があります。自動再試行します。",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", job.id)
+            .eq("user_id", job.user_id)
+            .eq("status", "running")
+            .is("request_id", null);
+        }
+        continue;
+      }
+
+      // failed / queued はDB上でrunningへ原子的にclaimする。
+      // claimに勝ったCronだけがHiggsfield APIを呼ぶ。
+      if (job.status === "failed" || (job.status === "queued" && !job.request_id)) {
+        if (job.status === "failed" && retryCount >= 2) {
           results.push({ jobId: job.id, step: "video-retry", status: "exhausted", retryCount });
           continue;
         }
 
-        const started = await generateHiggsfieldVideo({
-          prompt: String(job.prompt || ""),
-          duration: Number(job.duration || 5),
-          resolution: (String(job.resolution || "1080p") as "480p" | "720p" | "1080p"),
-          aspectRatio: (String(job.aspect_ratio || "9:16") as "16:9" | "4:3" | "1:1" | "3:4" | "9:16" | "adaptive"),
-          generateAudio: false,
-        });
-        const requestId = String(started.request_id ?? started.requestId ?? started.id ?? "");
-        if (!requestId) throw new Error("Higgsfield retryからrequest_idを取得できませんでした。");
+        const claimTime = new Date().toISOString();
+        const claimResponse = {
+          ...providerResponse,
+          operator_claimed_at: claimTime,
+        };
+        const { data: claim, error: claimError } = await db.from("production_jobs")
+          .update({
+            status: "running",
+            started_at: claimTime,
+            error: null,
+            provider_response: claimResponse,
+            updated_at: claimTime,
+          })
+          .eq("id", job.id)
+          .eq("user_id", job.user_id)
+          .eq("status", job.status)
+          .select("id")
+          .maybeSingle();
 
-        await db.from("production_jobs").update({
-          status: "running",
-          request_id: requestId,
-          provider_response: { ...providerResponse, retry_count: retryCount + 1, retry_started_at: new Date().toISOString(), retry_response: started },
-          error: null,
-          started_at: new Date().toISOString(),
-          completed_at: null,
-        }).eq("id", job.id).eq("user_id", job.user_id);
+        if (claimError) throw claimError;
+        if (!claim) {
+          results.push({ jobId: job.id, step: "video-claim", status: "skipped", reason: "another worker claimed this job" });
+          continue;
+        }
+        claimed = true;
 
-        results.push({ jobId: job.id, step: "video-retry", status: "running", retryCount: retryCount + 1, requestId });
-        continue;
-      }
-
-      // request_idがないqueued JobもCronが開始する。
-      if (!job.request_id) {
         const started = await generateHiggsfieldVideo({
           prompt: String(job.prompt || ""),
           duration: Number(job.duration || 5),
@@ -240,15 +261,28 @@ export async function GET(request: Request) {
         const requestId = String(started.request_id ?? started.requestId ?? started.id ?? "");
         if (!requestId) throw new Error("Higgsfield開始からrequest_idを取得できませんでした。");
 
+        const now = new Date().toISOString();
         await db.from("production_jobs").update({
           status: "running",
           request_id: requestId,
-          provider_response: started,
-          started_at: new Date().toISOString(),
+          provider_response: {
+            ...claimResponse,
+            retry_count: job.status === "failed" ? retryCount + 1 : retryCount,
+            started_response: started,
+          },
           error: null,
-        }).eq("id", job.id).eq("user_id", job.user_id);
+          started_at: now,
+          completed_at: null,
+          updated_at: now,
+        }).eq("id", job.id).eq("user_id", job.user_id).eq("status", "running");
 
-        results.push({ jobId: job.id, step: "video-start", status: "running", requestId });
+        results.push({
+          jobId: job.id,
+          step: job.status === "failed" ? "video-retry" : "video-start",
+          status: "running",
+          retryCount: job.status === "failed" ? retryCount + 1 : retryCount,
+          requestId,
+        });
         continue;
       }
 
@@ -272,6 +306,13 @@ export async function GET(request: Request) {
         });
       }
     } catch (error) {
+      if (claimed) {
+        await db.from("production_jobs").update({
+          status: "failed",
+          error: error instanceof Error ? error.message : String(error),
+          updated_at: new Date().toISOString(),
+        }).eq("id", job.id).eq("user_id", job.user_id).eq("status", "running");
+      }
       results.push({
         jobId: job.id,
         step: "video-poll",
