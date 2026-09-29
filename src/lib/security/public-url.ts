@@ -1,6 +1,8 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
+const MAX_REDIRECTS = 4;
+
 function blockedIp(address: string) {
   const normalized = address.toLowerCase().split("%")[0];
   if (normalized === "::1" || normalized === "0:0:0:0:0:0:0:1") return true;
@@ -25,19 +27,22 @@ export async function assertPublicUrl(input: string, allowedProtocols: readonly 
   if (!allowedProtocols.includes(url.protocol)) throw new Error("許可されていないURLスキームです。");
   if (url.username || url.password) throw new Error("認証情報を含むURLには対応していません。");
   const hostname = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
-  if (
-    hostname === "localhost" ||
-    hostname.endsWith(".localhost") ||
-    hostname === "local" ||
-    hostname.endsWith(".local")
-  ) throw new Error("ローカルネットワークのURLにはアクセスできません。");
-
-  const addresses = isIP(hostname)
-    ? [hostname]
-    : (await lookup(hostname, { all: true })).map((entry) => entry.address);
-
-  if (!addresses.length || addresses.some(blockedIp)) {
-    throw new Error("内部・プライベートネットワークのURLにはアクセスできません。");
+  if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname === "local" || hostname.endsWith(".local")) {
+    throw new Error("ローカルネットワークのURLにはアクセスできません。");
   }
+  const addresses = isIP(hostname) ? [hostname] : (await lookup(hostname, { all: true })).map((entry) => entry.address);
+  if (!addresses.length || addresses.some(blockedIp)) throw new Error("内部・プライベートネットワークのURLにはアクセスできません。");
   return url;
+}
+
+export async function fetchPublicUrl(input: string, init: RequestInit = {}) {
+  let url = await assertPublicUrl(input);
+  for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect++) {
+    const response = await fetch(url.toString(), { ...init, redirect: "manual" });
+    if (response.status < 300 || response.status >= 400) return response;
+    const location = response.headers.get("location");
+    if (!location || redirect === MAX_REDIRECTS) throw new Error("動画URLのリダイレクト回数が上限を超えました。");
+    url = await assertPublicUrl(new URL(location, url).toString());
+  }
+  throw new Error("動画URLを取得できませんでした。");
 }
