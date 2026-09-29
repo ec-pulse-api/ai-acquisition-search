@@ -7,9 +7,8 @@ export const maxDuration = 60;
 
 function clients() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !anon || !serviceRole) throw new Error("Supabase configuration is incomplete.");
+  if (!url || !serviceRole) throw new Error("Supabase configuration is incomplete.");
   return {
     admin: createClient(url, serviceRole, { auth: { autoRefreshToken: false, persistSession: false } })
   };
