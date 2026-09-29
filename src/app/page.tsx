@@ -1,9 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useState } from "react";
 import GoogleSignIn from "@/components/GoogleSignIn";
 import BillingButton from "@/components/BillingButton";
-import LinkedInConnect from "@/components/LinkedInConnect";
 import type { AcquisitionAnalyzeResult, EcPulseResearchBundle, EcPulseResearchRun } from "@/lib/acquisition/types";
 
 function List({ items }: { items: string[] }) {
@@ -30,9 +29,6 @@ export default function Home() {
   const [result, setResult] = useState<AcquisitionAnalyzeResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [narrationText, setNarrationText] = useState("");
-  const [narrationAudio, setNarrationAudio] = useState("");
-  const [narrationLoading, setNarrationLoading] = useState(false);
   const [ecPulse, setEcPulse] = useState<EcPulseResearchBundle | null>(null);
   const [ecPulseLoading, setEcPulseLoading] = useState(false);
   const [testSaving, setTestSaving] = useState(false);
@@ -43,21 +39,6 @@ export default function Home() {
   const [socialPostId, setSocialPostId] = useState("");
   const [researchHistory, setResearchHistory] = useState<EcPulseResearchRun[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [videoPrompt, setVideoPrompt] = useState("");
-  const [videoGenerating, setVideoGenerating] = useState(false);
-  const [videoJob, setVideoJob] = useState<any>(null);
-  const [videoAsset, setVideoAsset] = useState<any>(null);
-  const [videoError, setVideoError] = useState("");
-  const [publishPlatforms, setPublishPlatforms] = useState<string[]>(["tiktok", "instagram", "youtube", "linkedin"]);
-  const [publishCaption, setPublishCaption] = useState("");
-  const [publishing, setPublishing] = useState(false);
-  const [publishResult, setPublishResult] = useState<any>(null);
-  const videoPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => () => {
-    if (videoPollRef.current) clearInterval(videoPollRef.current);
-  }, []);
-
   async function getAccessToken() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -67,88 +48,6 @@ export default function Home() {
     const { data } = await supabase.auth.getSession();
     if (!data.session) throw new Error("先にGoogleでログインしてください。");
     return data.session.access_token;
-  }
-
-  async function pollVideoJob(jobId: string) {
-    try {
-      const token = await getAccessToken();
-      const res = await fetch(`/api/video/jobs/${jobId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || "動画ジョブの確認に失敗しました。");
-      setVideoJob(body.job);
-      if (body.asset) setVideoAsset(body.asset);
-      if (body.job.status === "completed" || body.job.status === "failed") {
-        if (videoPollRef.current) clearInterval(videoPollRef.current);
-        videoPollRef.current = null;
-        setVideoGenerating(false);
-        if (body.job.status === "failed") setVideoError(body.job.error || "動画生成に失敗しました。");
-      }
-    } catch (err) {
-      setVideoGenerating(false);
-      if (videoPollRef.current) clearInterval(videoPollRef.current);
-      videoPollRef.current = null;
-      setVideoError(err instanceof Error ? err.message : "動画ジョブの確認に失敗しました。");
-    }
-  }
-
-  async function generateVideo() {
-    setVideoGenerating(true);
-    setVideoError("");
-    setVideoAsset(null);
-    setVideoJob(null);
-    if (videoPollRef.current) clearInterval(videoPollRef.current);
-    try {
-      const token = await getAccessToken();
-      const prompt = videoPrompt.trim() || narrationText.trim();
-      if (!prompt) throw new Error("動画プロンプトまたはナレーション本文を入力してください。");
-      const res = await fetch("/api/video/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          prompt,
-          socialPostId: socialPostId || undefined,
-          duration: 5,
-          resolution: "1080p",
-          aspectRatio: "9:16",
-          generateAudio: false,
-        }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || "動画生成の開始に失敗しました。");
-      setVideoJob(body);
-      await pollVideoJob(body.jobId);
-      videoPollRef.current = setInterval(() => pollVideoJob(body.jobId), 8000);
-    } catch (err) {
-      setVideoGenerating(false);
-      setVideoError(err instanceof Error ? err.message : "動画生成の開始に失敗しました。");
-    }
-  }
-
-
-
-  async function publishVideo() {
-    if (!videoAsset?.video_url || !socialPostId) return;
-    setPublishing(true);
-    setPublishResult(null);
-    try {
-      const token = await getAccessToken();
-      const caption = publishCaption.trim() || (result ? result.analysis.decision.valueProposition : "");
-      const res = await fetch("/api/social/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-        body: JSON.stringify({ socialPostId, videoUrl: videoAsset.video_url, caption, platforms: publishPlatforms }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || "SNS投稿に失敗しました。");
-      setPublishResult(body);
-    } catch (err) {
-      setPublishResult({ ok: false, error: err instanceof Error ? err.message : "SNS投稿に失敗しました。" });
-    } finally {
-      setPublishing(false);
-    }
   }
 
   async function analyze(e?: FormEvent) {
@@ -199,11 +98,6 @@ export default function Home() {
       } finally {
         setHistoryLoading(false);
       }
-      const decision = data.data.analysis.decision;
-      setNarrationText(
-        `${decision.target}に向けて、${decision.problem}。だからこそ、${decision.valueProposition}。まずは${decision.channel}で${decision.format}を試してみましょう。`
-      );
-      setNarrationAudio("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "分析に失敗しました。");
     } finally {
@@ -259,31 +153,6 @@ export default function Home() {
     } catch(err) { setError(err instanceof Error ? err.message : "実績保存に失敗しました。"); }
   }
 
-  async function generateNarration() {
-    setNarrationLoading(true);
-    setError("");
-
-    try {
-      const narrationToken = await getAccessToken();
-      const res = await fetch("/api/narration", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${narrationToken}` },
-        body: JSON.stringify({
-          text: narrationText,
-          voice: "Kore",
-          style: "自然で明るく、信頼感のある日本語広告ナレーション",
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "ナレーション生成に失敗しました。");
-      setNarrationAudio(`data:${data.data.mimeType};base64,${data.data.audioBase64}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "ナレーション生成に失敗しました。");
-    } finally {
-      setNarrationLoading(false);
-    }
-  }
-
   return (
     <main className="shell">
       <header className="topbar">
@@ -334,7 +203,6 @@ export default function Home() {
         <p className="hint">まずは商品URLを入力。調査結果は履歴として蓄積し、再調査で変化を追えます。</p>
       </section>
 
-      <LinkedInConnect socialPostId={socialPostId} />
 
       {result && (
         <div className="results">
@@ -642,106 +510,12 @@ export default function Home() {
             {testSaved && <p className="success">{testSaved}</p>}
           </section>
 
-          <section className="next video-engine">
-            <p className="eyebrow">VIDEO ENGINE · HIGGSFIELD</p>
-            <h2>広告動画を生成する</h2>
-            <p className="hint">広告テストの訴求をそのまま動画生成Jobに送り、完成したMP4を永続保存します。ログイン後に実行できます。</p>
-            {!socialPostId && <p className="video-warning">先に「このテスト計画を保存」すると、動画と広告テストを紐づけられます。</p>}
-            <textarea
-              value={videoPrompt}
-              onChange={(e) => setVideoPrompt(e.target.value)}
-              rows={6}
-              placeholder={result ? `例：${result.analysis.decision.valueProposition}を訴求。最初の3秒で悩みを提示し、自然なUGC広告として見せる。` : "動画生成プロンプト"}
-              style={{ width: "100%", marginBottom: 12 }}
-            />
-            <div className="video-actions">
-              <button type="button" onClick={generateVideo} disabled={videoGenerating || !socialPostId}>
-                {videoGenerating ? "動画生成中..." : "広告動画を生成"}
-              </button>
-              {videoJob?.status && <span className={videoJob.status === "completed" ? "video-status done" : videoJob.status === "failed" ? "video-status failed" : "video-status"}>{videoJob.status.toUpperCase()}</span>}
-            </div>
-            {videoError && <p className="error">{videoError}</p>}
-            {videoJob?.requestId && <p className="hint">Job: {videoJob.jobId} · Higgsfield request: {videoJob.requestId}</p>}
-            {videoAsset?.video_url && (
-              <div className="video-result">
-                <div className="video-result-head">
-                  <strong>MP4完成</strong>
-                  <a href={videoAsset.video_url} target="_blank" rel="noreferrer">動画を開く →</a>
-                </div>
-                <video controls playsInline src={videoAsset.video_url} />
-                <small>{videoAsset.resolution} · {videoAsset.aspect_ratio} · {videoAsset.duration}秒 · {videoAsset.provider}</small>
-              </div>
-            )}
-          </section>
-
-          <section className="next publisher-loop">
-            <p className="eyebrow">UNIFIED SNS PUBLISHER</p>
-            <h2>完成動画をSNSへ投稿</h2>
-            <p className="hint">完成したMP4を同じ広告テストに紐づけて、複数SNSへ一括投稿します。</p>
-            <div className="publisher-platforms">
-              {["tiktok","instagram","youtube","x","linkedin"].map((platform) => (
-                <label key={platform}>
-                  <input type="checkbox" checked={publishPlatforms.includes(platform)}
-                    onChange={(e) => setPublishPlatforms((current) => e.target.checked ? [...new Set([...current, platform])] : current.filter((item) => item !== platform))} />
-                  {platform}
-                </label>
-              ))}
-            </div>
-            <textarea value={publishCaption} onChange={(e) => setPublishCaption(e.target.value)} rows={4}
-              placeholder={result ? result.analysis.decision.valueProposition : "投稿本文"} />
-            <button type="button" onClick={publishVideo} disabled={!videoAsset?.video_url || !socialPostId || publishing || !publishPlatforms.length}>
-              {publishing ? "SNSへ投稿中..." : "選択したSNSへ一括投稿"}
-            </button>
-            {!videoAsset?.video_url && <p className="video-warning">先に広告動画を完成させてください。</p>}
-            {publishResult?.error && <p className="error">{publishResult.error}</p>}
-            {publishResult?.results && (
-              <div className="publish-results">
-                {publishResult.results.map((item: any) => (
-                  <div key={item.platform} className={item.ok ? "publish-row done" : "publish-row failed"}>
-                    <strong>{item.platform}</strong><span>{item.ok ? "投稿完了" : item.error}</span>
-                    {item.url && <a href={item.url} target="_blank" rel="noreferrer">開く →</a>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="next">
-            <p className="eyebrow">VIDEO ENGINE</p>
-            <h2>Gemini TTS ナレーション</h2>
-            <p className="hint">
-              集客判断からナレーション本文を作り、Gemini TTSでWAV音声を生成します。
-            </p>
-            <textarea
-              value={narrationText}
-              onChange={(e) => setNarrationText(e.target.value)}
-              rows={5}
-              style={{ width: "100%", marginBottom: 12 }}
-              placeholder="ナレーション本文"
-            />
-            <button
-              type="button"
-              disabled={narrationLoading || !narrationText.trim()}
-              onClick={generateNarration}
-            >
-              {narrationLoading ? "音声生成中..." : "ナレーションを生成"}
-            </button>
-
-            {narrationAudio && (
-              <div style={{ marginTop: 16 }}>
-                <audio controls src={narrationAudio} style={{ width: "100%" }} />
-                <a href={narrationAudio} download="narration.wav" style={{ display: "inline-block", marginTop: 8 }}>
-                  WAVを保存
-                </a>
-              </div>
-            )}
-          </section>
 
 
       <section className="next">
         <p className="eyebrow">MONETIZATION</p>
         <h2>AI集客を継続運用する</h2>
-        <p className="hint">無料で入口を試し、Proでは広告テストを継続。結果を蓄積して次の施策につなげます。</p>
+        <p className="hint">無料で入口を試し、Proでは広告テストを継続。投稿結果を蓄積して次の施策につなげます。</p>
         <div className="action-list">
           <article>
             <b>FREE</b>
@@ -749,7 +523,7 @@ export default function Home() {
           </article>
           <article>
             <b>PRO</b>
-            <div><strong>広告運用を回す</strong><p>継続的なテスト、クリエイティブ生成、結果学習を想定。</p><small>月額4,980円（税込）</small><div style={{ marginTop: 10 }}><BillingButton /></div></div>
+            <div><strong>広告運用を回す</strong><p>継続的なテスト、結果の記録、次アクションの学習に対応。</p><small>月額4,980円（税込）</small><div style={{ marginTop: 10 }}><BillingButton /></div></div>
           </article>
           <article>
             <b>AGENCY</b>
