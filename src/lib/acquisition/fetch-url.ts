@@ -1,7 +1,35 @@
 import type { PageSnapshot } from "./types";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 
 const MAX_BYTES = 1_500_000;
 const TIMEOUT_MS = 12_000;
+const MAX_REDIRECTS = 4;
+
+function blockedIp(address: string) {
+  const normalized = address.toLowerCase().split('%')[0];
+  if (normalized === '::1' || normalized === '0:0:0:0:0:0:0:1') return true;
+  if (isIP(normalized) === 4) {
+    const [a,b] = normalized.split('.').map(Number);
+    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) ||
+      (a >= 224) || (a === 100 && b >= 64 && b <= 127);
+  }
+  if (isIP(normalized) === 6) return normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb');
+  return true;
+}
+
+async function assertPublicUrl(input: string) {
+  let url: URL;
+  try { url = new URL(input); } catch { throw new Error('URLの形式が正しくありません。'); }
+  if (!['http:','https:'].includes(url.protocol)) throw new Error('http または https のURLを入力してください。');
+  if (url.username || url.password) throw new Error('認証情報を含むURLには対応していません。');
+  const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname.endsWith('.local')) throw new Error('ローカルネットワークのURLにはアクセスできません。');
+  const addresses = isIP(hostname) ? [hostname] : (await lookup(hostname, { all: true })).map((entry) => entry.address);
+  if (!addresses.length || addresses.some(blockedIp)) throw new Error('内部・プライベートネットワークのURLにはアクセスできません。');
+  return url;
+}
 
 function decodeHtml(value: string) {
   return value
@@ -63,20 +91,27 @@ function cleanText(html: string) {
 }
 
 export async function fetchPageSnapshot(inputUrl: string): Promise<PageSnapshot> {
-  let url: URL;
-  try { url = new URL(inputUrl); } catch { throw new Error("URLの形式が正しくありません。"); }
-  if (!["http:", "https:"].includes(url.protocol)) throw new Error("http または https のURLを入力してください。");
+  let url = await assertPublicUrl(inputUrl);
+  let response: Response | null = null;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  let response: Response;
-  try {
-    response = await fetch(url.toString(), {
-      signal: controller.signal, redirect: "follow", cache: "no-store",
-      headers: { "User-Agent": "AI-Acquisition-Search/1.0" }
-    });
-  } catch { throw new Error("ページを取得できませんでした。URLと公開状態を確認してください。"); }
-  finally { clearTimeout(timer); }
+  for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      response = await fetch(url.toString(), {
+        signal: controller.signal, redirect: "manual", cache: "no-store",
+        headers: { "User-Agent": "AI-Acquisition-Search/1.0" }
+      });
+    } catch { throw new Error("ページを取得できませんでした。URLと公開状態を確認してください。"); }
+    finally { clearTimeout(timer); }
+
+    if (response.status < 300 || response.status >= 400) break;
+    const location = response.headers.get("location");
+    if (!location || redirect === MAX_REDIRECTS) throw new Error("リダイレクト回数が上限を超えました。");
+    url = await assertPublicUrl(new URL(location, url).toString());
+  }
+
+  if (!response) throw new Error("ページを取得できませんでした。");
 
   if (!response.ok) throw new Error("ページ取得に失敗しました（HTTP " + response.status + "）。");
   const type = response.headers.get("content-type") ?? "";
