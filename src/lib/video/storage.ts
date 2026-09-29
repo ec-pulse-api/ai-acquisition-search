@@ -48,3 +48,11 @@ export async function saveVideoToStorage(input: {
     contentType
   };
 }
+
+export async function deleteVideoFromStorage(path: string) {
+  const supabase = adminClient();
+  const { error } = await supabase.storage.from(bucket).remove([path]);
+  if (error) {
+    throw new Error(`Supabase Storage cleanup failed: ${error.message}`);
+  }
+}
