@@ -70,8 +70,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       jobId,
-      requestId,
-      status: "running",
+      status: "queued",
       message: "動画生成Jobをキューに入れました。Workerがバックグラウンドで生成します。"
     }, { status: 202 });
   } catch (error) {
