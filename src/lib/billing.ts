@@ -6,6 +6,12 @@ function requireEnv(name: string) {
   return value;
 }
 
+function requireSupabasePublicKey() {
+  return process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ?? (() => { throw new Error("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY is not configured"); })();
+}
+
 export function getAdminSupabase() {
   return createClient(
     requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
@@ -35,7 +41,7 @@ export async function getUserFromBearer(request: Request) {
 
   const supabase = createClient(
     requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+    requireSupabasePublicKey(),
     { auth: { autoRefreshToken: false, persistSession: false } },
   );
   const { data, error } = await supabase.auth.getUser(token);
