@@ -118,3 +118,133 @@ export async function getLinkedInMemberPostAnalytics(accessToken: string, postUr
   if (!response.ok) throw new Error(data.message || data.errorDetail || "LinkedIn analytics failed");
   return data;
 }
+
+export async function createLinkedInVideoPost(
+  accessToken: string,
+  author: string,
+  commentary: string,
+  video: Uint8Array,
+) {
+  const initResponse = await fetch("https://api.linkedin.com/rest/videos?action=initializeUpload", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + accessToken,
+      "Content-Type": "application/json",
+      "Linkedin-Version": LINKEDIN_VERSION,
+      "X-Restli-Protocol-Version": "2.0.0",
+    },
+    body: JSON.stringify({
+      initializeUploadRequest: {
+        owner: author,
+        fileSizeBytes: video.byteLength,
+        uploadCaptions: false,
+        uploadThumbnail: false,
+      },
+    }),
+  });
+  const initData = await initResponse.json().catch(() => ({}));
+  if (!initResponse.ok) {
+    throw new Error(initData.message || initData.errorDetail || "LinkedIn video initialize upload failed");
+  }
+
+  const value = initData?.value;
+  const videoUrn = String(value?.video || "");
+  const instructions = Array.isArray(value?.uploadInstructions) ? value.uploadInstructions : [];
+  if (!videoUrn || !instructions.length) {
+    throw new Error("LinkedIn video upload instructionsが返りませんでした。");
+  }
+
+  const etags: string[] = [];
+  for (const instruction of instructions) {
+    const firstByte = Number(instruction.firstByte);
+    const lastByte = Number(instruction.lastByte);
+    const chunk = video.slice(firstByte, lastByte + 1);
+    const uploadResponse = await fetch(String(instruction.uploadUrl), {
+      method: "PUT",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: chunk,
+    });
+    if (!uploadResponse.ok) {
+      throw new Error(`LinkedIn video upload failed: HTTP ${uploadResponse.status}`);
+    }
+    const etag = uploadResponse.headers.get("etag");
+    if (!etag) throw new Error("LinkedIn video uploadのETagが返りませんでした。");
+    etags.push(etag);
+  }
+
+  const finalizeResponse = await fetch("https://api.linkedin.com/rest/videos?action=finalizeUpload", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + accessToken,
+      "Content-Type": "application/json",
+      "Linkedin-Version": LINKEDIN_VERSION,
+      "X-Restli-Protocol-Version": "2.0.0",
+    },
+    body: JSON.stringify({
+      finalizeUploadRequest: {
+        video: videoUrn,
+        uploadToken: String(value?.uploadToken || ""),
+        uploadedPartIds: etags,
+      },
+    }),
+  });
+  const finalizeData = await finalizeResponse.json().catch(() => ({}));
+  if (!finalizeResponse.ok) {
+    throw new Error(finalizeData.message || finalizeData.errorDetail || "LinkedIn video finalize failed");
+  }
+
+  let videoStatus = "PROCESSING";
+  for (let attempt = 0; attempt < 20 && videoStatus !== "AVAILABLE"; attempt++) {
+    const statusResponse = await fetch(
+      "https://api.linkedin.com/rest/videos/" + encodeURIComponent(videoUrn),
+      {
+        headers: {
+          Authorization: "Bearer " + accessToken,
+          "Linkedin-Version": LINKEDIN_VERSION,
+          "X-Restli-Protocol-Version": "2.0.0",
+        },
+        cache: "no-store",
+      },
+    );
+    const statusData = await statusResponse.json().catch(() => ({}));
+    if (!statusResponse.ok) {
+      throw new Error(statusData.message || statusData.errorDetail || "LinkedIn video status failed");
+    }
+    videoStatus = String(statusData?.status || "");
+    if (videoStatus === "PROCESSING_FAILED") {
+      throw new Error(statusData?.processingFailureReason || "LinkedIn video processing failed");
+    }
+    if (videoStatus !== "AVAILABLE") {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+  if (videoStatus !== "AVAILABLE") {
+    throw new Error("LinkedIn video processingがタイムアウトしました。");
+  }
+
+  const response = await fetch("https://api.linkedin.com/rest/posts", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + accessToken,
+      "Content-Type": "application/json",
+      "Linkedin-Version": LINKEDIN_VERSION,
+      "X-Restli-Protocol-Version": "2.0.0",
+    },
+    body: JSON.stringify({
+      author,
+      commentary,
+      visibility: "PUBLIC",
+      distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] },
+      content: { media: { title: "AI acquisition creative", id: videoUrn } },
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false,
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || data.errorDetail || "LinkedIn video post failed");
+  return {
+    id: response.headers.get("x-restli-id") || data.id || null,
+    videoUrn,
+    raw: data,
+  };
+}
