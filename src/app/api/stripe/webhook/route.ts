@@ -120,8 +120,72 @@ export async function POST(request: Request) {
 
   try {
     const event = JSON.parse(payload) as StripeObject;
-    await handleEvent(event);
-    return NextResponse.json({ received: true });
+    const eventId = typeof event.id === "string" ? event.id : null;
+    const eventType = typeof event.type === "string" ? event.type : null;
+
+    if (!eventId || !eventType) {
+      return NextResponse.json({ error: "Invalid Stripe event" }, { status: 400 });
+    }
+
+    const supabase = getAdminSupabase();
+    const { data: inserted, error: insertError } = await supabase
+      .from("stripe_webhook_events")
+      .insert({
+        event_id: eventId,
+        event_type: eventType,
+        status: "processing",
+        payload: event,
+      })
+      .select("event_id")
+      .maybeSingle();
+
+    if (insertError) throw insertError;
+
+    if (!inserted) {
+      const { data: existing, error: existingError } = await supabase
+        .from("stripe_webhook_events")
+        .select("status")
+        .eq("event_id", eventId)
+        .maybeSingle();
+      if (existingError) throw existingError;
+
+      if (existing?.status === "processed") {
+        return NextResponse.json({ received: true, reused: true });
+      }
+
+      // A previous failed/processing delivery is retried by Stripe. Do not
+      // silently acknowledge an event whose first attempt did not finish.
+      await supabase
+        .from("stripe_webhook_events")
+        .update({
+          status: "processing",
+          error_message: null,
+        })
+        .eq("event_id", eventId);
+    }
+
+    try {
+      await handleEvent(event);
+      const { error: markError } = await supabase
+        .from("stripe_webhook_events")
+        .update({
+          status: "processed",
+          processed_at: new Date().toISOString(),
+          error_message: null,
+        })
+        .eq("event_id", eventId);
+      if (markError) throw markError;
+      return NextResponse.json({ received: true });
+    } catch (error) {
+      await supabase
+        .from("stripe_webhook_events")
+        .update({
+          status: "failed",
+          error_message: error instanceof Error ? error.message : "Webhook processing failed",
+        })
+        .eq("event_id", eventId);
+      throw error;
+    }
   } catch (error) {
     console.error("stripe webhook error", error);
     return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
