@@ -6,11 +6,11 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 function baseUrl() {
-  return (
-    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
-    process.env.VERCEL_URL ||
-    "ai-acquisition-search-beta.vercel.app"
-  ).replace(/^https?:\/\//, "");
+  const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (!productionUrl) {
+    throw new Error("VERCEL_PROJECT_PRODUCTION_URL is required for operator-loop internal requests.");
+  }
+  return productionUrl.replace(/^https?:\/\//, "");
 }
 
 async function internalRequest(
