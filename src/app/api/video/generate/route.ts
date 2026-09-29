@@ -16,10 +16,12 @@ function clients() {
 
 export async function POST(request: Request) {
   let jobId = "";
+  let userId = "";
   let usageEventId = "";
   try {
     const user = await getUserFromBearer(request);
     if (!user) return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
+    userId = user.id;
     const body = await request.json();
     const prompt = String(body.prompt || "").trim();
     if (!prompt) return NextResponse.json({ error: "prompt is required" }, { status: 400 });
@@ -81,17 +83,17 @@ export async function POST(request: Request) {
       } catch {}
     } else if (usageEventId) {
       try {
-        const refund = await refundMonthlyUsage(user.id, "video_generation", usageEventId);
+        const refund = await refundMonthlyUsage(userId, "video_generation", usageEventId);
         if (!refund.refunded) {
           console.error("video generation quota refund was not applied", {
-            userId: user.id,
+            userId,
             usageEventId,
             reason: refund.reason,
           });
         }
       } catch (refundError) {
         console.error("video generation quota refund failed", {
-          userId: user.id,
+          userId,
           usageEventId,
           error: refundError,
         });
