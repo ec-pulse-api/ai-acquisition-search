@@ -22,6 +22,7 @@ function makePrompt(input: {
 }
 
 export async function POST(request: Request) {
+  let userId = "";
   let jobId = "";
   let nextCreativeId = "";
   let nextPostId = "";
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
   try {
     const user = await getUserFromBearer(request);
     if (!user) return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
+    userId = user.id;
 
     const body = await request.json() as {
       socialPostId?: string;
@@ -212,8 +214,8 @@ export async function POST(request: Request) {
       const db = getAdminSupabase();
       // 途中生成物を残すと、次回Cronが「既に生成済み」と誤認するため、
       // このリクエストで作った行だけをロールバックする。
-      if (jobId) await db.from("production_jobs").delete().eq("id", jobId).eq("user_id", user.id);
-      if (operatorRunId) await db.from("operator_runs").delete().eq("id", operatorRunId).eq("user_id", user.id);
+      if (jobId) await db.from("production_jobs").delete().eq("id", jobId).eq("user_id", userId);
+      if (operatorRunId) await db.from("operator_runs").delete().eq("id", operatorRunId).eq("user_id", userId);
       if (nextPostId) await db.from("social_posts").delete().eq("id", nextPostId).eq("user_id", user.id);
       if (nextCreativeId) await db.from("creatives").delete().eq("id", nextCreativeId).eq("user_id", user.id);
     } catch (cleanupError) {
