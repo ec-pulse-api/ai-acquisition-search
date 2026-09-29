@@ -83,7 +83,7 @@ export async function POST(request: Request) {
       if (existing.status === "publishing") return { claimed: false, row: existing };
 
       const { data: reclaimed, error: reclaimError } = await supabase.from("social_posts")
-        .update({ status: "publishing", error: null, published_at: null, updated_at: new Date().toISOString() })
+        .update({ status: "publishing", published_at: null, updated_at: new Date().toISOString() })
         .eq("id", existing.id)
         .eq("user_id", user.id)
         .eq("status", "failed")
@@ -101,7 +101,6 @@ export async function POST(request: Request) {
         post_url: postUrl,
         published_at: new Date().toISOString(),
         status: "published",
-        error: null,
         metadata: { source_social_post_id: socialPostId, ...metadata },
         updated_at: new Date().toISOString(),
       }).eq("id", rowId).eq("user_id", user.id).eq("network", network).eq("status", "publishing")
@@ -113,7 +112,7 @@ export async function POST(request: Request) {
     const fail = async (rowId: string, message: string) => {
       await supabase.from("social_posts").update({
         status: "failed",
-        error: message,
+        metadata: { source_social_post_id: socialPostId, publish_error: message },
         updated_at: new Date().toISOString(),
       }).eq("id", rowId).eq("user_id", user.id).eq("status", "publishing");
     };
