@@ -255,9 +255,13 @@ export async function GET(request: Request) {
         }
 
         const claimTime = new Date().toISOString();
+        // 外部Higgsfield APIへの試行回数をclaim時点で確定する。
+        // API開始失敗でも回数を残し、Cronごとの無限再試行を防ぐ。
+        const attemptCount = job.status === "failed" ? retryCount + 1 : 1;
         const claimResponse = {
           ...providerResponse,
           operator_claimed_at: claimTime,
+          retry_count: attemptCount,
         };
         const { data: claim, error: claimError } = await db.from("production_jobs")
           .update({
@@ -296,7 +300,7 @@ export async function GET(request: Request) {
           request_id: requestId,
           provider_response: {
             ...claimResponse,
-            retry_count: job.status === "failed" ? retryCount + 1 : retryCount,
+            retry_count: attemptCount,
             started_response: started,
           },
           error: null,
