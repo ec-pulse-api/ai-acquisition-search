@@ -39,7 +39,10 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
+
+      - name: Verify Capacitor
+        run: npx cap --version
 
       - name: Add Android platform
         run: npx cap add android
@@ -49,12 +52,19 @@ jobs:
 
       - name: Build release AAB
         working-directory: android
-        run: ./gradlew bundleRelease --no-daemon
+        run: ./gradlew bundleRelease --no-daemon --stacktrace
+
+      - name: Verify AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s android/app/build/outputs/bundle/release/app-release.aab
+          ls -lh android/app/build/outputs/bundle/release/app-release.aab
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
           name: ai-acquisition-search-release-aab
-          path: android/app/build/outputs/bundle/release/*.aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
