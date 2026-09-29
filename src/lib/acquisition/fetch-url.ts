@@ -1,5 +1,9 @@
 import type { PageSnapshot } from "./types";
 import { assertPublicUrl } from "@/lib/security/public-url";
+
+const MAX_BYTES = 1_500_000;
+const TIMEOUT_MS = 12_000;
+const MAX_REDIRECTS = 4;
 function decodeHtml(value: string) {
   return value
     .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&quot;/gi, '"')
