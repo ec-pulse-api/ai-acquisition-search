@@ -207,8 +207,8 @@ export async function GET(request: Request) {
         const started = await generateHiggsfieldVideo({
           prompt: String(job.prompt || ""),
           duration: Number(job.duration || 5),
-          resolution: String(job.resolution || "1080p"),
-          aspectRatio: String(job.aspect_ratio || "9:16"),
+          resolution: (String(job.resolution || "1080p") as "480p" | "720p" | "1080p"),
+          aspectRatio: (String(job.aspect_ratio || "9:16") as "16:9" | "4:3" | "1:1" | "3:4" | "9:16" | "adaptive"),
           generateAudio: false,
         });
         const requestId = String(started.request_id ?? started.requestId ?? started.id ?? "");
@@ -232,8 +232,8 @@ export async function GET(request: Request) {
         const started = await generateHiggsfieldVideo({
           prompt: String(job.prompt || ""),
           duration: Number(job.duration || 5),
-          resolution: String(job.resolution || "1080p"),
-          aspectRatio: String(job.aspect_ratio || "9:16"),
+          resolution: (String(job.resolution || "1080p") as "480p" | "720p" | "1080p"),
+          aspectRatio: (String(job.aspect_ratio || "9:16") as "16:9" | "4:3" | "1:1" | "3:4" | "9:16" | "adaptive"),
           generateAudio: false,
         });
         const requestId = String(started.request_id ?? started.requestId ?? started.id ?? "");
