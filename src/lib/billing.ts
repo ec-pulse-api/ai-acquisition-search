@@ -42,3 +42,13 @@ export async function getUserFromBearer(request: Request) {
   if (error || !data.user) return null;
   return data.user;
 }
+export async function consumeMonthlyUsage(userId: string, eventType: string, freeLimit: number) {
+  const db = getAdminSupabase();
+  const { data, error } = await db.rpc("consume_monthly_usage", {
+    p_user_id: userId,
+    p_event_type: eventType,
+    p_free_limit: freeLimit,
+  });
+  if (error) throw error;
+  return data as { allowed: boolean; plan: string; used: number | null; limit: number | null };
+}
