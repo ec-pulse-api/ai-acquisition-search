@@ -9,14 +9,14 @@ export default function GoogleSignIn() {
 
   useEffect(() => {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (!url || !anonKey) {
+    if (!url || !publishableKey) {
       setReady(true);
       return;
     }
 
-    const supabase = createClient(url, anonKey);
+    const supabase = createClient(url, publishableKey);
 
     void supabase.auth.getUser().then(({ data }) => {
       setUser(data.user ?? null);
@@ -34,11 +34,11 @@ export default function GoogleSignIn() {
 
   async function signIn() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (!url || !anonKey) return;
+    if (!url || !publishableKey) return;
 
-    const supabase = createClient(url, anonKey);
+    const supabase = createClient(url, publishableKey);
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
@@ -49,11 +49,11 @@ export default function GoogleSignIn() {
 
   async function signOut() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (!url || !anonKey) return;
+    if (!url || !publishableKey) return;
 
-    const supabase = createClient(url, anonKey);
+    const supabase = createClient(url, publishableKey);
     await supabase.auth.signOut();
     setUser(null);
   }
