@@ -60,7 +60,7 @@ export default function Home() {
 
   async function getAccessToken() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!supabaseUrl || !anonKey) throw new Error("Supabase設定がありません。");
     const { createClient } = await import("@supabase/supabase-js");
     const supabase = createClient(supabaseUrl, anonKey);
@@ -213,7 +213,7 @@ export default function Home() {
     setTestSaved("");
     try {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
       if (!supabaseUrl || !anonKey) throw new Error("Supabase設定がありません。");
       const { createClient } = await import("@supabase/supabase-js");
       const supabase = createClient(supabaseUrl, anonKey);
@@ -238,7 +238,7 @@ export default function Home() {
   async function saveMetrics() {
     try {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
       if (!supabaseUrl || !anonKey) throw new Error("Supabase設定がありません。");
       const { createClient } = await import("@supabase/supabase-js");
       const supabase = createClient(supabaseUrl, anonKey);
