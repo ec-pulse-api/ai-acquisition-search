@@ -197,6 +197,23 @@ export async function POST(request: Request) {
       social_post_id: post.id, ...normalized, ctr, cvr, cpa: null, roas: null,
       raw: { source: post.network, fetched_at: new Date().toISOString(), data: raw },
     }).select("id,measured_at,ctr,cvr,roas").single();
+    if (metricError?.code === "23505") {
+      const { data: existingMetric, error: existingMetricError } = await db.from("post_metrics")
+        .select("id,measured_at,ctr,cvr,roas")
+        .eq("social_post_id", post.id)
+        .order("measured_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (existingMetricError || !existingMetric) throw existingMetricError || new Error("既存の実績レコードを再取得できませんでした。");
+      return NextResponse.json({
+        ok: true,
+        reused: true,
+        socialPostId: post.id,
+        network: post.network,
+        metric: existingMetric,
+        normalized,
+      });
+    }
     if (metricError) throw metricError;
 
     return NextResponse.json({ ok: true, socialPostId: post.id, network: post.network, metric, normalized });
