@@ -50,5 +50,22 @@ export async function consumeMonthlyUsage(userId: string, eventType: string, fre
     p_free_limit: freeLimit,
   });
   if (error) throw error;
-  return data as { allowed: boolean; plan: string; used: number | null; limit: number | null };
+  return data as {
+    allowed: boolean;
+    plan: string;
+    used: number | null;
+    limit: number | null;
+    usage_event_id?: string;
+  };
+}
+
+export async function refundMonthlyUsage(userId: string, eventType: string, usageEventId: string) {
+  const db = getAdminSupabase();
+  const { data, error } = await db.rpc("refund_monthly_usage", {
+    p_user_id: userId,
+    p_event_type: eventType,
+    p_usage_event_id: usageEventId,
+  });
+  if (error) throw error;
+  return data as { refunded: boolean; usage_event_id?: string; reason?: string };
 }
