@@ -23,6 +23,9 @@ function makePrompt(input: {
 
 export async function POST(request: Request) {
   let jobId = "";
+  let nextCreativeId = "";
+  let nextPostId = "";
+  let operatorRunId = "";
   try {
     const user = await getUserFromBearer(request);
     if (!user) return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
@@ -137,6 +140,7 @@ export async function POST(request: Request) {
       status: "planned"
     }).select("id,title,hook,scenario").single();
     if (nextCreativeError || !nextCreative) throw new Error(nextCreativeError?.message || "次のクリエイティブ作成に失敗しました。");
+    nextCreativeId = nextCreative.id;
 
     const { data: nextPost, error: nextPostError } = await db.from("social_posts").insert({
       creative_id: nextCreative.id,
@@ -154,6 +158,7 @@ export async function POST(request: Request) {
       }
     }).select("id,network,status,caption,metadata").single();
     if (nextPostError || !nextPost) throw new Error(nextPostError?.message || "次の投稿レコード作成に失敗しました。");
+    nextPostId = nextPost.id;
 
     let video = null;
     if (body.autoGenerate !== false) {
@@ -199,18 +204,20 @@ export async function POST(request: Request) {
       completed_at: new Date().toISOString()
     }).select("id").single();
     if (runError) throw runError;
+    operatorRunId = run.id;
 
     return NextResponse.json({ ok: true, runId: run.id, creative: nextCreative, socialPost: nextPost, video }, { status: 201 });
   } catch (error) {
-    if (jobId) {
-      try {
-        const db = getAdminSupabase();
-        await db.from("production_jobs").update({
-          status: "failed",
-          error: error instanceof Error ? error.message : "動画生成開始に失敗しました。",
-          completed_at: new Date().toISOString()
-        }).eq("id", jobId);
-      } catch {}
+    try {
+      const db = getAdminSupabase();
+      // 途中生成物を残すと、次回Cronが「既に生成済み」と誤認するため、
+      // このリクエストで作った行だけをロールバックする。
+      if (jobId) await db.from("production_jobs").delete().eq("id", jobId).eq("user_id", user.id);
+      if (operatorRunId) await db.from("operator_runs").delete().eq("id", operatorRunId).eq("user_id", user.id);
+      if (nextPostId) await db.from("social_posts").delete().eq("id", nextPostId).eq("user_id", user.id);
+      if (nextCreativeId) await db.from("creatives").delete().eq("id", nextCreativeId).eq("user_id", user.id);
+    } catch (cleanupError) {
+      console.error("next creative rollback failed", cleanupError);
     }
     console.error("next creative error", error);
     return NextResponse.json({ error: error instanceof Error ? error.message : "次の広告生成に失敗しました。" }, { status: 500 });
