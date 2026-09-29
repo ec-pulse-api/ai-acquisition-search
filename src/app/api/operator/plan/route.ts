@@ -8,6 +8,12 @@ export async function POST(request: Request) {
   const user = await getUserFromBearer(request);
   if (!user) return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
 
+  let productId = "";
+  let productCreated = false;
+  let planId = "";
+  let creativeId = "";
+  let socialPostId = "";
+
   try {
     const body = await request.json() as { source?: AcquisitionAnalyzeResult["source"]; analysis?: AcquisitionAnalyzeResult["analysis"] };
     const source = body.source;
@@ -18,7 +24,7 @@ export async function POST(request: Request) {
     const existing = await db.from("products").select("id").eq("user_id", user.id).eq("url", source.url).maybeSingle();
     if (existing.error) throw existing.error;
 
-    let productId = existing.data?.id as string | undefined;
+    productId = existing.data?.id as string | undefined || "";
     if (productId) {
       const { error } = await db.from("products").update({
         name: source.productName || source.title || "商品・サービス",
@@ -33,6 +39,7 @@ export async function POST(request: Request) {
       }).select("id").single();
       if (error) throw error;
       productId = data.id;
+      productCreated = true;
     }
 
     const decision = analysis.decision;
@@ -50,6 +57,7 @@ export async function POST(request: Request) {
       status: "planned",
     }).select("id, created_at").single();
     if (planError) throw planError;
+    planId = plan.id;
 
     const firstPost = analysis.nextPosts?.[0];
     const { data: creative, error: creativeError } = await db.from("creatives").insert({
@@ -63,6 +71,7 @@ export async function POST(request: Request) {
       status: "planned",
     }).select("id").single();
     if (creativeError) throw creativeError;
+    creativeId = creative.id;
     const { data: socialPost, error: socialPostError } = await db.from("social_posts").insert({
       creative_id: creative.id,
       user_id: user.id,
@@ -72,6 +81,7 @@ export async function POST(request: Request) {
       metadata: { plan_id: plan.id, hypothesis: decision.testPlan },
     }).select("id").single();
     if (socialPostError) throw socialPostError;
+    socialPostId = socialPost.id;
 
     const { data: run, error: runError } = await db.from("operator_runs").insert({
       product_id: productId,
@@ -87,6 +97,22 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, planId: plan.id, runId: run.id, socialPostId: socialPost.id, message: "広告テスト仮説を保存しました。結果を入力すると次のテストにつなげられます。" });
   } catch (error) {
+    // このAPIは複数テーブルへ順番に書き込むため、後段失敗時に
+    // 中途半端なテスト計画だけを残さない。既存productは絶対に削除しない。
+    try {
+      const db = getAdminSupabase();
+      if (socialPostId) await db.from("social_posts").delete().eq("id", socialPostId).eq("user_id", user.id);
+      if (creativeId) await db.from("creatives").delete().eq("id", creativeId).eq("user_id", user.id);
+      if (planId) await db.from("acquisition_plans").delete().eq("id", planId).eq("user_id", user.id);
+      if (productCreated && productId) {
+        const { count } = await db.from("products").select("id", { count: "exact", head: true }).eq("id", productId).eq("user_id", user.id);
+        if (count === 1) {
+          await db.from("products").delete().eq("id", productId).eq("user_id", user.id);
+        }
+      }
+    } catch (cleanupError) {
+      console.error("operator plan rollback failed", cleanupError);
+    }
     console.error("operator plan error", error);
     return NextResponse.json({ error: "テスト計画の保存に失敗しました。" }, { status: 500 });
   }
