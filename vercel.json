@@ -3,10 +3,6 @@
     {
       "path": "/api/cron/operator-loop",
       "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/cron/higgsfield-worker",
-      "schedule": "0 15 * * *"
     }
   ]
 }
