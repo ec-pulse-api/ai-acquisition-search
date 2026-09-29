@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getUserFromBearer } from "@/lib/billing";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,8 @@ function cleanQuery(value: string) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getUserFromBearer(request);
+    if (!user) return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
     const body = await request.json();
     const url = typeof body?.url === "string" ? body.url.trim() : "";
     if (!url) {
