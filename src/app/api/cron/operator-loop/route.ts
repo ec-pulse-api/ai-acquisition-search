@@ -183,16 +183,74 @@ export async function GET(request: Request) {
 
   // Higgsfieldの未完了ジョブを回収し、完成したらそのままSNSへ投稿する。
   const { data: jobs } = await db.from("production_jobs")
-    .select("id,user_id,social_post_id,status,request_id,prompt,duration,resolution,aspect_ratio,model,created_at")
-    .in("status", ["queued","running"])
-    .not("request_id", "is", null)
+    .select("id,user_id,social_post_id,status,request_id,prompt,duration,resolution,aspect_ratio,model,provider_response,error,created_at")
+    .in("status", ["queued","running","failed"])
     .order("created_at", { ascending: true })
     .limit(30);
 
   for (const job of jobs || []) {
-    if (!job.user_id || !job.request_id) continue;
+    if (!job.user_id) continue;
 
     try {
+      const providerResponse = (job.provider_response && typeof job.provider_response === "object")
+        ? job.provider_response as Record<string, unknown>
+        : {};
+      const retryCount = Number(providerResponse.retry_count || 0);
+
+      // 失敗Jobは最大2回まで自動再試行する。
+      if (job.status === "failed") {
+        if (retryCount >= 2) {
+          results.push({ jobId: job.id, step: "video-retry", status: "exhausted", retryCount });
+          continue;
+        }
+
+        const started = await generateHiggsfieldVideo({
+          prompt: String(job.prompt || ""),
+          duration: Number(job.duration || 5),
+          resolution: String(job.resolution || "1080p"),
+          aspectRatio: String(job.aspect_ratio || "9:16"),
+          generateAudio: false,
+        });
+        const requestId = String(started.request_id ?? started.requestId ?? started.id ?? "");
+        if (!requestId) throw new Error("Higgsfield retryからrequest_idを取得できませんでした。");
+
+        await db.from("production_jobs").update({
+          status: "running",
+          request_id: requestId,
+          provider_response: { ...providerResponse, retry_count: retryCount + 1, retry_started_at: new Date().toISOString(), retry_response: started },
+          error: null,
+          started_at: new Date().toISOString(),
+          completed_at: null,
+        }).eq("id", job.id).eq("user_id", job.user_id);
+
+        results.push({ jobId: job.id, step: "video-retry", status: "running", retryCount: retryCount + 1, requestId });
+        continue;
+      }
+
+      // request_idがないqueued JobもCronが開始する。
+      if (!job.request_id) {
+        const started = await generateHiggsfieldVideo({
+          prompt: String(job.prompt || ""),
+          duration: Number(job.duration || 5),
+          resolution: String(job.resolution || "1080p"),
+          aspectRatio: String(job.aspect_ratio || "9:16"),
+          generateAudio: false,
+        });
+        const requestId = String(started.request_id ?? started.requestId ?? started.id ?? "");
+        if (!requestId) throw new Error("Higgsfield開始からrequest_idを取得できませんでした。");
+
+        await db.from("production_jobs").update({
+          status: "running",
+          request_id: requestId,
+          provider_response: started,
+          started_at: new Date().toISOString(),
+          error: null,
+        }).eq("id", job.id).eq("user_id", job.user_id);
+
+        results.push({ jobId: job.id, step: "video-start", status: "running", requestId });
+        continue;
+      }
+
       const polled = await internalRequest("GET", `/api/video/jobs/${job.id}`, job.user_id);
       const asset = polled.payload?.asset;
 
