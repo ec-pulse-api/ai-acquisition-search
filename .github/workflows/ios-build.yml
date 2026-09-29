@@ -39,6 +39,11 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync ios
 
+      - name: Apply native app icon
+        run: |
+          python -m pip install --quiet pillow
+          python scripts/generate-native-icons.py
+
       - name: Build unsigned iOS archive
         run: |
           set -euo pipefail
