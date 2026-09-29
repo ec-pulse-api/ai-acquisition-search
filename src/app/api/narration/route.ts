@@ -8,11 +8,13 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getUserFromBearer(request);
     if (!user) return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
-    const usage = await consumeMonthlyUsage(user.id, "narration_generation", 5);
-    if (!usage.allowed) return NextResponse.json({ error: `今月の無料ナレーション生成回数（${usage.limit}回）を使い切りました。Proへアップグレードしてください。`, usage }, { status: 429 });
     const body = await request.json();
 
     const text = typeof body?.text === "string" ? body.text : "";
+    if (!text.trim()) return NextResponse.json({ error: "text is required" }, { status: 400 });
+    if (text.length > 10000) return NextResponse.json({ error: "text is too long" }, { status: 400 });
+    const usage = await consumeMonthlyUsage(user.id, "narration_generation", 5);
+    if (!usage.allowed) return NextResponse.json({ error: `今月の無料ナレーション生成回数（${usage.limit}回）を使い切りました。Proへアップグレードしてください。`, usage }, { status: 429 });
     const voice = typeof body?.voice === "string" ? body.voice : undefined;
     const style = typeof body?.style === "string" ? body.style : undefined;
 
