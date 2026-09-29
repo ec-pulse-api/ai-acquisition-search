@@ -1,12 +1,9 @@
 import { ImageResponse } from "next/og";
 
-const ICON_SIZE = 192;
+export const runtime = "nodejs";
 
-export const size = { width: ICON_SIZE, height: ICON_SIZE };
-export const contentType = "image/png";
-
-export default function Icon() {
-  const s = ICON_SIZE;
+export function GET() {
+  const s = 192;
   return new ImageResponse(
     <div style={{ width: s, height: s, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: s * 0.22, background: "linear-gradient(135deg, #071d63 0%, #0042c8 52%, #10d8c0 100%)", overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: s * 0.82, height: s * 0.62, position: "relative" }}>
@@ -16,6 +13,6 @@ export default function Icon() {
         </svg>
       </div>
     </div>,
-    { width: ICON_SIZE, height: ICON_SIZE }
+    { width: s, height: s }
   );
 }
