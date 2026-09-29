@@ -158,9 +158,10 @@ export default function Home() {
     setResult(null);
 
     try {
+      const token = await getAccessToken();
       const res = await fetch("/api/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ url }),
       });
       const data = await res.json();
@@ -170,9 +171,10 @@ export default function Home() {
       setEcPulse(null);
       setEcPulseLoading(true);
       try {
+        const researchToken = await getAccessToken();
         const researchRes = await fetch("/api/ec-pulse-research", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${researchToken}` },
           body: JSON.stringify({ url }),
         });
         const researchData = await researchRes.json();
@@ -262,9 +264,10 @@ export default function Home() {
     setError("");
 
     try {
+      const narrationToken = await getAccessToken();
       const res = await fetch("/api/narration", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${narrationToken}` },
         body: JSON.stringify({
           text: narrationText,
           voice: "Kore",
