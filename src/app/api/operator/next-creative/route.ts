@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getAdminSupabase, getUserFromBearer } from "@/lib/billing";
-import { generateHiggsfieldVideo } from "@/lib/video/higgsfield";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -183,24 +182,10 @@ export async function POST(request: Request) {
       if (jobError || !job) throw new Error(jobError?.message || "動画生成ジョブの作成に失敗しました。");
       jobId = job.id;
 
-      const started = await generateHiggsfieldVideo({
-        prompt,
-        duration: 5,
-        resolution: "1080p",
-        aspectRatio: "9:16",
-        generateAudio: false
-      });
-      const requestId = String(started.request_id ?? started.requestId ?? started.id ?? "");
-      if (!requestId) throw new Error("Higgsfieldからrequest_idを取得できませんでした。");
-
-      await db.from("production_jobs").update({
-        status: "running",
-        request_id: requestId,
-        provider_response: started,
-        started_at: new Date().toISOString()
-      }).eq("id", jobId).eq("user_id", user.id);
-
-      video = { jobId, requestId, status: "running" };
+      // Higgsfieldはここでは開始しない。
+      // next-creativeはproduction_jobs=queuedまででHTTP処理を終了し、
+      // operator-loopのWorker処理がqueued Jobを取得してHiggsfieldを開始する。
+      video = { jobId, requestId: null, status: "queued" };
     }
 
     const { data: run, error: runError } = await db.from("operator_runs").insert({
