@@ -42,3 +42,9 @@ next-env.d.ts
 
 .vercel
 .env*
+
+ai-acquisition-search-upload.keystore
+ai-acquisition-search-upload.keystore.b64
+release-aab/
+
+apple-signing/
