@@ -121,7 +121,7 @@ export async function GET(request: Request) {
 
   const { data: posts, error } = await db
     .from("social_posts")
-    .select("id,user_id,network,published_at,external_post_id")
+    .select("id,user_id,network,published_at,external_post_id,metadata")
     .eq("status", "published")
     .not("external_post_id", "is", null)
     .lt("published_at", cutoff)
@@ -135,6 +135,15 @@ export async function GET(request: Request) {
     if (!post.user_id) continue;
 
     try {
+      const postMetadata = post.metadata && typeof post.metadata === "object"
+        ? post.metadata as Record<string, unknown>
+        : {};
+      const patrolStatus = String(postMetadata.operator_patrol_status || "");
+      if (patrolStatus === "stopped" || patrolStatus === "superseded") {
+        results.push({ postId: post.id, network: post.network, step: "patrol-skip", reason: patrolStatus });
+        continue;
+      }
+
       const { data: latestMetric } = await db
         .from("post_metrics")
         .select("measured_at")
@@ -164,7 +173,18 @@ export async function GET(request: Request) {
       }
 
       if (decision.payload?.verdict === "stop") {
-        results.push({ postId: post.id, network: post.network, verdict: "stop", nextCreative: false });
+        await db.from("social_posts").update({
+          metadata: {
+            ...postMetadata,
+            operator_patrol_status: "stopped",
+            operator_patrol_stopped_at: new Date().toISOString(),
+            operator_patrol_verdict: "stop",
+            operator_patrol_reason: decision.payload?.reason || null,
+          },
+          updated_at: new Date().toISOString(),
+        }).eq("id", post.id).eq("user_id", post.user_id);
+
+        results.push({ postId: post.id, network: post.network, verdict: "stop", nextCreative: false, patrol: "stopped" });
         continue;
       }
 
@@ -178,6 +198,19 @@ export async function GET(request: Request) {
         autoGenerate: true,
       });
 
+      if (next.status >= 200 && next.status < 300 && next.payload?.socialPost?.id) {
+        await db.from("social_posts").update({
+          metadata: {
+            ...postMetadata,
+            operator_patrol_status: "superseded",
+            operator_patrol_verdict: decision.payload?.verdict || null,
+            operator_patrol_next_post_id: next.payload.socialPost.id,
+            operator_patrol_advanced_at: new Date().toISOString(),
+          },
+          updated_at: new Date().toISOString(),
+        }).eq("id", post.id).eq("user_id", post.user_id);
+      }
+
       results.push({
         postId: post.id,
         network: post.network,
@@ -185,6 +218,7 @@ export async function GET(request: Request) {
         nextCreative: next.status >= 200 && next.status < 300,
         nextStatus: next.status,
         nextCreativeId: next.payload?.creative?.id,
+        nextSocialPostId: next.payload?.socialPost?.id,
         videoJobId: next.payload?.video?.jobId,
         reused: next.payload?.reused === true,
         error: next.status >= 300 ? next.payload?.error : undefined,
