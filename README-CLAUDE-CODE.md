@@ -34,4 +34,4 @@ They are never placed in plugin source or browser code.
 
 ## Community submission
 
-Submit this plugin through the Claude Code community marketplace submission form after validation.
+After validation, submit this plugin through Anthropic's official Claude directory submission portal: https://platform.claude.com/plugins/submit. The portal is the current submission path for third-party Claude Code plugins.
