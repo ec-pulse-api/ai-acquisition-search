@@ -1,11 +1,26 @@
 export type SearchEvidenceCategory = "customer_pain" | "customer_desire" | "competitor" | "market" | "channel";
 
+export type SearchEvidenceType =
+  | "official"
+  | "product_listing"
+  | "review"
+  | "social"
+  | "competitor"
+  | "market"
+  | "other";
+
+export type SearchMatchType = "exact_product" | "brand_or_model" | "category" | "weak";
+
 export type WebSearchResult = {
   title: string;
   url: string;
   snippet: string;
   category: SearchEvidenceCategory;
   query: string;
+  evidenceType: SearchEvidenceType;
+  matchType: SearchMatchType;
+  relevanceScore: number;
+  sourceDomain: string;
 };
 
 function decode(value: string) {
@@ -29,33 +44,81 @@ function extractBingResults(html: string, limit: number, query: string, category
     const snippet = stripTags(match[3] ?? "");
     if (!/^https?:\/\//i.test(resultUrl) || !title) continue;
     if (results.some((x) => x.url === resultUrl)) continue;
-    results.push({ title, url: resultUrl, snippet, category, query });
+    results.push({
+      title,
+      url: resultUrl,
+      snippet,
+      category,
+      query,
+      evidenceType: "other",
+      matchType: "weak",
+      relevanceScore: 0,
+      sourceDomain: getDomain(resultUrl),
+    });
     if (results.length >= limit) break;
   }
   return results;
 }
 
-function relevanceScore(result: WebSearchResult, productName: string, productCategory: string, query: string) {
+function getDomain(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\\./i, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function classifyEvidence(result: WebSearchResult, productName: string, productCategory: string, identifiers: string[]) {
   const text = `${result.title} ${result.snippet} ${result.url}`.toLowerCase();
   const product = productName.toLowerCase().trim();
   const category = productCategory.toLowerCase().trim();
   const tokens = product.split(/[^\\p{L}\\p{N}]+/u).filter((x) => x.length >= 2);
+  const domain = getDomain(result.url);
+
+  const exact = product.length >= 3 && text.includes(product);
+  const identifierMatch = identifiers.some((value) => value.length >= 3 && text.includes(value.toLowerCase()));
+  const tokenMatches = tokens.filter((token) => text.includes(token)).length;
+
+  let matchType: SearchMatchType = "weak";
+  if (exact) matchType = "exact_product";
+  else if (identifierMatch || (tokens.length > 1 && tokenMatches >= Math.ceil(tokens.length * 0.7))) matchType = "brand_or_model";
+  else if (category && text.includes(category)) matchType = "category";
+
+  let evidenceType: SearchEvidenceType = "other";
+  if (/tiktok\\.com|instagram\\.com|youtube\\.com|youtu\\.be|x\\.com|twitter\\.com/.test(domain)) {
+    evidenceType = "social";
+  } else if (/amazon\\.|rakuten\\.|shopping\\.yahoo\\.|store\\.shopping\\.yahoo\\.|kakaku\\.|price\\./.test(domain)) {
+    evidenceType = "product_listing";
+  } else if (/口コミ|レビュー|評判|クチコミ|体験談|質問|知恵袋/.test(text) || /review|reviews|qa|question|chiebukuro/.test(domain)) {
+    evidenceType = "review";
+  } else if (/公式|メーカー|ブランド/.test(text) || /official|brand|maker/.test(domain)) {
+    evidenceType = "official";
+  } else if (result.category === "competitor") {
+    evidenceType = "competitor";
+  } else if (result.category === "market") {
+    evidenceType = "market";
+  }
+
   let score = 0;
+  if (exact) score += 35;
+  else if (identifierMatch) score += 24;
+  else if (matchType === "brand_or_model") score += 17;
+  else if (matchType === "category") score += 6;
 
-  if (product && text.includes(product)) score += 18;
-  for (const token of tokens) if (text.includes(token)) score += 3;
-  if (category && text.includes(category)) score += 5;
-  if (result.snippet.length >= 40) score += 2;
+  score += Math.min(tokenMatches, 4) * 3;
+  if (category && text.includes(category)) score += 4;
+  if (result.snippet.length >= 50) score += 2;
+  if (evidenceType === "official") score += 8;
+  if (evidenceType === "product_listing") score += 7;
+  if (evidenceType === "review") score += 5;
+  if (evidenceType === "social") score += 4;
+  if (/まとめ|ランキング|おすすめ|比較/.test(result.title) && matchType !== "exact_product") score -= 4;
 
-  const url = result.url.toLowerCase();
-  if (/amazon\\.|rakuten\\.|yahoo\\.|kakaku\\.|price\\./.test(url)) score += 2;
-  if (/まとめ|ランキング|おすすめ|比較/.test(result.title)) score += 1;
+  // Generic/category pages must not outrank evidence about the actual product.
+  if (tokens.length >= 2 && tokenMatches === 1 && !exact && !identifierMatch) score -= 15;
+  if (matchType === "weak") score -= 10;
 
-  // Reject pages that only happen to match a single generic term.
-  const matchedTokens = tokens.filter((token) => text.includes(token)).length;
-  if (tokens.length >= 2 && matchedTokens === 1 && !text.includes(product)) score -= 12;
-
-  return score;
+  return { evidenceType, matchType, score, domain };
 }
 
 export async function searchWeb(query: string, limit = 5, category: SearchEvidenceCategory = "market"): Promise<WebSearchResult[]> {
@@ -104,6 +167,10 @@ export async function discoverAcquisitionSignals(input: AcquisitionSearchInput):
     { query: `"${base}" 比較 代替品 競合`, category: "competitor" },
     { query: `"${base}" 市場 トレンド 販売`, category: "market" },
     { query: `"${base}" TikTok Instagram YouTube`, category: "channel" },
+    ...(identifiers.slice(0, 2).map((id) => ({
+      query: `"${base}" "${id}"`,
+      category: "market" as SearchEvidenceCategory,
+    }))),
   ];
 
   const groups = await Promise.all(
@@ -115,14 +182,31 @@ export async function discoverAcquisitionSignals(input: AcquisitionSearchInput):
     .filter((result, index, all) =>
       all.findIndex((x) => x.url === result.url) === index
     )
-    .map((result) => ({
-      result,
-      score: relevanceScore(result, base, category, result.query),
-    }))
-    .filter(({ score }) => score >= 3)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 30)
-    .map(({ result }) => result);
+    .map((result) => {
+      const classification = classifyEvidence(result, base, category, identifiers);
+      return {
+        result: {
+          ...result,
+          ...classification,
+          relevanceScore: classification.score,
+        },
+        score: classification.score,
+      };
+    })
+    .filter(({ score }) => score >= 8)
+    .sort((a, b) => b.score - a.score);
+
+  // Keep the final set diverse: don't let one SEO domain fill the investigation.
+  const domainCounts = new Map<string, number>();
+  const results: WebSearchResult[] = [];
+  for (const item of ranked) {
+    const count = domainCounts.get(item.result.sourceDomain) ?? 0;
+    const maxPerDomain = item.result.matchType === "exact_product" ? 4 : 2;
+    if (count >= maxPerDomain) continue;
+    domainCounts.set(item.result.sourceDomain, count + 1);
+    results.push(item.result);
+    if (results.length >= 30) break;
+  }
 
   return { queries: searches.map((x) => x.query), results };
 }
