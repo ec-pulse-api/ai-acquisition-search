@@ -2,7 +2,15 @@
   "mcpServers": {
     "ai-acquisition-search": {
       "command": "npx",
-      "args": ["tsx", "${CLAUDE_PLUGIN_ROOT}/src/mcp/server.ts"]
+      "args": [
+        "tsx",
+        "${CLAUDE_PLUGIN_ROOT}/src/mcp/server.ts"
+      ],
+      "env": {
+        "HF_API_KEY_ID": "${HF_API_KEY_ID}",
+        "HF_API_KEY_SECRET": "${HF_API_KEY_SECRET}",
+        "GEMINI_API_KEY": "${GEMINI_API_KEY}"
+      }
     }
   }
 }
