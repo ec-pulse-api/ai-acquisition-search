@@ -68,7 +68,15 @@ function getDomain(url: string) {
   }
 }
 
+function normalizeIdentity(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[\s\-_・/\\()[\]{}:：,.，。]/g, "");
+}
+
 function classifyEvidence(result: WebSearchResult, productName: string, productCategory: string, productBrand: string, identifiers: string[], sourceDomain: string) {
+  const titleAndSnippet = `${result.title} ${result.snippet}`.toLowerCase();
   const text = `${result.title} ${result.snippet} ${result.url}`.toLowerCase();
   const product = productName.toLowerCase().trim();
   const category = productCategory.toLowerCase().trim();
@@ -77,14 +85,19 @@ function classifyEvidence(result: WebSearchResult, productName: string, productC
   const tokens = product.split(/[^\p{L}\p{N}]+/u).filter((x) => x.length >= 2);
   const domain = getDomain(result.url);
 
-  const exact = product.length >= 3 && text.includes(product);
-  const brandMatch = brand.length >= 2 && text.includes(brand);
-  const identifierMatch = identifiers.some((value) => value.length >= 3 && text.includes(value.toLowerCase()));
-  const tokenMatches = tokens.filter((token) => text.includes(token)).length;
+  const normalizedProduct = normalizeIdentity(product);
+  const normalizedTitleSnippet = normalizeIdentity(titleAndSnippet);
+  const exactPhrase = product.length >= 3 && titleAndSnippet.includes(product);
+  const normalizedExact = normalizedProduct.length >= 5 && normalizedTitleSnippet.includes(normalizedProduct);
+  const brandMatch = brand.length >= 2 && titleAndSnippet.includes(brand);
+  const identifierMatch = identifiers.some((value) => value.length >= 3 && titleAndSnippet.includes(value.toLowerCase()));
+  const tokenMatches = tokens.filter((token) => titleAndSnippet.includes(token)).length;
+  const strongTokenMatch = tokens.length >= 2 && tokenMatches >= Math.ceil(tokens.length * 0.8);
+  const exact = exactPhrase || normalizedExact;
 
   let matchType: SearchMatchType = "weak";
-  if (exact) matchType = "exact_product";
-  else if (identifierMatch || brandMatch || (tokens.length > 1 && tokenMatches >= Math.ceil(tokens.length * 0.7))) matchType = "brand_or_model";
+  if (exact && (identifierMatch || brandMatch || strongTokenMatch)) matchType = "exact_product";
+  else if (identifierMatch || brandMatch || strongTokenMatch) matchType = "brand_or_model";
   else if (category && text.includes(category)) matchType = "category";
 
   let evidenceType: SearchEvidenceType = "other";
@@ -103,11 +116,13 @@ function classifyEvidence(result: WebSearchResult, productName: string, productC
   }
 
   let score = 0;
-  if (exact) score += 35;
-  else if (identifierMatch) score += 24;
-  else if (brandMatch) score += 20;
-  else if (matchType === "brand_or_model") score += 17;
-  else if (matchType === "category") score += 6;
+  if (exact && identifierMatch) score += 45;
+  else if (exact && brandMatch) score += 40;
+  else if (exact) score += 32;
+  else if (identifierMatch) score += 26;
+  else if (brandMatch && strongTokenMatch) score += 23;
+  else if (matchType === "brand_or_model") score += 15;
+  else if (matchType === "category") score += 4;
 
   score += Math.min(tokenMatches, 4) * 3;
   if (category && text.includes(category)) score += 4;
@@ -117,11 +132,19 @@ function classifyEvidence(result: WebSearchResult, productName: string, productC
   if (evidenceType === "product_listing") score += 7;
   if (evidenceType === "review") score += 5;
   if (evidenceType === "social") score += 4;
-  if (/まとめ|ランキング|おすすめ|比較/.test(result.title) && matchType !== "exact_product") score -= 4;
+  if (/まとめ|ランキング|おすすめ|比較/.test(result.title) && matchType !== "exact_product") score -= 6;
 
   // Generic/category pages must not outrank evidence about the actual product.
-  if (tokens.length >= 2 && tokenMatches === 1 && !exact && !identifierMatch) score -= 15;
-  if (matchType === "weak") score -= 10;
+  if (tokens.length >= 2 && tokenMatches <= 1 && !exact && !identifierMatch) score -= 18;
+  if (matchType === "category") score -= 8;
+  if (matchType === "weak") score -= 14;
+
+  // A product name appearing only in the URL is not enough to establish identity.
+  if (exact && !exactPhrase && !normalizedExact) score -= 10;
+
+  // Evidence that actually identifies the product gets a strong bonus; generic
+  // market pages are allowed only when they also contain product identity.
+  if (result.category !== "market" && matchType === "weak") score -= 8;
 
   return { evidenceType, matchType, score, domain };
 }
@@ -222,17 +245,43 @@ export async function discoverAcquisitionSignals(input: AcquisitionSearchInput):
       return a.result.sourceDomain.localeCompare(b.result.sourceDomain);
     });
 
-  // Keep the final set diverse: don't let one SEO domain fill the investigation.
+  // Build an evidence set instead of filling an arbitrary "30 results".
+  // This prevents SEO-heavy domains or one evidence type from dominating the analysis.
   const domainCounts = new Map<string, number>();
+  const typeCounts = new Map<SearchEvidenceType, number>();
   const results: WebSearchResult[] = [];
-  for (const item of ranked) {
-    const count = domainCounts.get(item.result.sourceDomain) ?? 0;
-    const maxPerDomain = item.result.matchType === "exact_product" ? 4 : 2;
-    if (count >= maxPerDomain) continue;
-    domainCounts.set(item.result.sourceDomain, count + 1);
-    results.push(item.result);
+
+  const typePriority: SearchEvidenceType[] = [
+    "official",
+    "product_listing",
+    "review",
+    "social",
+    "competitor",
+    "market",
+    "other",
+  ];
+
+  for (const type of typePriority) {
+    for (const item of ranked.filter((x) => x.result.evidenceType === type)) {
+      const count = domainCounts.get(item.result.sourceDomain) ?? 0;
+      const maxPerDomain = item.result.matchType === "exact_product" ? 3 : 2;
+      if (count >= maxPerDomain) continue;
+      domainCounts.set(item.result.sourceDomain, count + 1);
+      typeCounts.set(type, (typeCounts.get(type) ?? 0) + 1);
+      results.push(item.result);
+      if (results.length >= 30) break;
+    }
     if (results.length >= 30) break;
   }
+
+  // Re-rank after diversity selection: evidence strength first, then identity.
+  results.sort((a, b) => {
+    if (b.relevanceScore !== a.relevanceScore) return b.relevanceScore - a.relevanceScore;
+    if (a.matchType !== b.matchType) {
+      return a.matchType === "exact_product" ? -1 : 1;
+    }
+    return a.sourceDomain.localeCompare(b.sourceDomain);
+  });
 
   return { queries: searches.map((x) => x.query), results };
 }
