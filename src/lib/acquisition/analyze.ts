@@ -4,6 +4,21 @@ import type { WebSearchResult } from "./search-web";
 import type { SocialSignal } from "./social-search";
 import type { ShopSignal } from "./shop-search";
 
+function detectEvidenceTensions(results: WebSearchResult[]) {
+  const rules: { topic: string; positive: RegExp; negative: RegExp }[] = [
+    { topic: "価格", positive: /安い|コスパ|お買い得|価格に満足|値段.*満足/i, negative: /高い|割高|価格.*不満|値段.*高/i },
+    { topic: "品質・耐久性", positive: /丈夫|耐久|長持ち|品質.*良|しっかり/i, negative: /壊れ|耐久.*不満|脆い|すぐ.*壊|品質.*悪/i },
+    { topic: "使いやすさ", positive: /使いやす|簡単|便利|操作.*簡単/i, negative: /使いにく|難しい|操作.*難|分かりにく/i },
+    { topic: "サイズ", positive: /サイズ.*ちょうど|ぴったり|大きさ.*満足/i, negative: /大きすぎ|小さすぎ|サイズ.*合わ/i },
+    { topic: "効果・性能", positive: /効果.*あった|性能.*良|満足.*効果|期待.*以上/i, negative: /効果.*ない|効果.*不満|性能.*悪|期待.*外れ/i },
+  ];
+  return rules.flatMap((rule) => {
+    const positiveEvidence = results.filter((x) => rule.positive.test(x.title + " " + x.snippet)).slice(0, 4).map((x) => "[" + x.evidenceType + "] " + x.title + ": " + x.snippet);
+    const negativeEvidence = results.filter((x) => rule.negative.test(x.title + " " + x.snippet)).slice(0, 4).map((x) => "[" + x.evidenceType + "] " + x.title + ": " + x.snippet);
+    if (!positiveEvidence.length && !negativeEvidence.length) return [];
+    return [{ topic: rule.topic, positiveEvidence, negativeEvidence, status: positiveEvidence.length && negativeEvidence.length ? "conflict" as const : "one_sided" as const }];
+  });
+}
 function fallback(
   source: PageSnapshot,
   webResults: { query: string; results: WebSearchResult[] } = { query: "", results: [] },
