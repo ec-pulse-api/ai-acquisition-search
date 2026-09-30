@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: "AI Acquisition Search",
   webDir: "public",
   server: {
-    url: process.env.CAPACITOR_SERVER_URL || "https://ai-acquisition-search.vercel.app",
+    url: process.env.CAPACITOR_SERVER_URL || "https://ai-acquisition-search-naitoshyuichirou-6935.vercel.app",
     cleartext: false,
   },
 };
