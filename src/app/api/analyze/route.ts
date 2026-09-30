@@ -94,6 +94,8 @@ export async function POST(request: NextRequest) {
       description: source.description,
       productSignals: source.productSignals,
       productCategory: source.productCategory,
+      productBrand: source.productBrand,
+      sourceDomain: (() => { try { return new URL(source.url).hostname.replace(/^www\./i, ""); } catch { return ""; } })(),
     });
     const productName = source.productName || source.title;
     const socialSignals = await discoverSocialSignals(productName);

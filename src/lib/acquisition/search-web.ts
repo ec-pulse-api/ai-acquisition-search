@@ -68,26 +68,29 @@ function getDomain(url: string) {
   }
 }
 
-function classifyEvidence(result: WebSearchResult, productName: string, productCategory: string, identifiers: string[]) {
+function classifyEvidence(result: WebSearchResult, productName: string, productCategory: string, productBrand: string, identifiers: string[], sourceDomain: string) {
   const text = `${result.title} ${result.snippet} ${result.url}`.toLowerCase();
   const product = productName.toLowerCase().trim();
   const category = productCategory.toLowerCase().trim();
+  const brand = productBrand.toLowerCase().trim();
+  const source = sourceDomain.toLowerCase().trim();
   const tokens = product.split(/[^\p{L}\p{N}]+/u).filter((x) => x.length >= 2);
   const domain = getDomain(result.url);
 
   const exact = product.length >= 3 && text.includes(product);
+  const brandMatch = brand.length >= 2 && text.includes(brand);
   const identifierMatch = identifiers.some((value) => value.length >= 3 && text.includes(value.toLowerCase()));
   const tokenMatches = tokens.filter((token) => text.includes(token)).length;
 
   let matchType: SearchMatchType = "weak";
   if (exact) matchType = "exact_product";
-  else if (identifierMatch || (tokens.length > 1 && tokenMatches >= Math.ceil(tokens.length * 0.7))) matchType = "brand_or_model";
+  else if (identifierMatch || brandMatch || (tokens.length > 1 && tokenMatches >= Math.ceil(tokens.length * 0.7))) matchType = "brand_or_model";
   else if (category && text.includes(category)) matchType = "category";
 
   let evidenceType: SearchEvidenceType = "other";
   if (/tiktok\.com|instagram\.com|youtube\.com|youtu\.be|x\.com|twitter\.com/.test(domain)) {
     evidenceType = "social";
-  } else if (/amazon\.|rakuten\.|shopping\.yahoo\.|store\\.shopping\.yahoo\.|kakaku\.|price\./.test(domain)) {
+  } else if (/amazon\.|rakuten\.|shopping\.yahoo\.|store\.shopping\.yahoo\.|kakaku\.|price\./.test(domain)) {
     evidenceType = "product_listing";
   } else if (/口コミ|レビュー|評判|クチコミ|体験談|質問|知恵袋/.test(text) || /review|reviews|qa|question|chiebukuro/.test(domain)) {
     evidenceType = "review";
@@ -102,11 +105,13 @@ function classifyEvidence(result: WebSearchResult, productName: string, productC
   let score = 0;
   if (exact) score += 35;
   else if (identifierMatch) score += 24;
+  else if (brandMatch) score += 20;
   else if (matchType === "brand_or_model") score += 17;
   else if (matchType === "category") score += 6;
 
   score += Math.min(tokenMatches, 4) * 3;
   if (category && text.includes(category)) score += 4;
+  if (source && domain === source) score += 12;
   if (result.snippet.length >= 50) score += 2;
   if (evidenceType === "official") score += 8;
   if (evidenceType === "product_listing") score += 7;
@@ -148,6 +153,8 @@ export type AcquisitionSearchInput = {
   description: string;
   productSignals?: string[];
   productCategory?: string;
+  productBrand?: string;
+  sourceDomain?: string;
 };
 
 export async function discoverAcquisitionSignals(input: AcquisitionSearchInput): Promise<{
@@ -160,9 +167,12 @@ export async function discoverAcquisitionSignals(input: AcquisitionSearchInput):
     .slice(0, 100);
   const category = (input.productCategory || "").replace(/\s+/g, " ").trim().slice(0, 50);
   const identifiers = (input.productSignals || [])
-    .filter((signal) => signal && signal.length >= 3)
+    .filter((signal) => /[0-9]/.test(signal) || /型番|モデル|model|sku|asin|jan/i.test(signal))
+    .filter((signal) => signal.length >= 3)
     .slice(0, 5)
     .map((signal) => signal.replace(/\s+/g, " ").trim().slice(0, 80));
+  const brand = (input.productBrand || "").replace(/\s+/g, " ").trim().slice(0, 80);
+  const sourceDomain = (input.sourceDomain || "").replace(/^www\./i, "").trim().toLowerCase();
 
   const searches: { query: string; category: SearchEvidenceCategory }[] = [
     { query: `"${base}" 口コミ 評判 レビュー`, category: "customer_pain" },
@@ -170,6 +180,7 @@ export async function discoverAcquisitionSignals(input: AcquisitionSearchInput):
     { query: `"${base}" 比較 代替品 競合`, category: "competitor" },
     { query: `"${base}" 市場 トレンド 販売`, category: "market" },
     { query: `"${base}" TikTok Instagram YouTube`, category: "channel" },
+    ...(brand && brand.toLowerCase() !== base.toLowerCase() ? [{ query: `"${brand}" "${base}"`, category: "market" as SearchEvidenceCategory }] : []),
     ...(identifiers.slice(0, 2).map((id) => ({
       query: `"${base}" "${id}"`,
       category: "market" as SearchEvidenceCategory,
@@ -186,7 +197,7 @@ export async function discoverAcquisitionSignals(input: AcquisitionSearchInput):
       all.findIndex((x) => x.url === result.url) === index
     )
     .map((result) => {
-      const classification = classifyEvidence(result, base, category, identifiers);
+      const classification = classifyEvidence(result, base, category, brand, identifiers, sourceDomain);
       return {
         result: {
           ...result,

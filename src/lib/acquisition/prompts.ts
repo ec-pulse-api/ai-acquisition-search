@@ -11,7 +11,7 @@ export function buildAcquisitionPrompt(
 ) {
   const searchText = search.results.map((x, i) =>
     [
-      `[${i + 1}] [${x.category}] ${x.title}`,
+      `[${i + 1}] [${x.category}] [${x.evidenceType}] [${x.matchType}] score=${x.relevanceScore} ${x.title}`,
       `Query: ${x.query}`,
       `URL: ${x.url}`,
       `概要: ${x.snippet}`,
@@ -49,12 +49,12 @@ export function buildAcquisitionPrompt(
     "TikTok Shop競合商品データ:\n" + shopText,
     "TikTok Shopデータは競合・価格・販売量の仮説を作るための観測値です。未取得値は事実として補完しないでください。",
     "SNSデータは反応の仮説を作るための観測値です。数値だけで売上を保証せず、投稿内容と指標を分けて評価してください。",
-    "検索結果は発見材料です。category は customer_pain / customer_desire / competitor / market / channel の5分類です。",
+    "検索結果は発見材料です。category は customer_pain / customer_desire / competitor / market / channel の5分類です。evidenceType は official / product_listing / review / social / competitor / market / other、matchType は exact_product / brand_or_model / category / weak です。exact_product や official/product_listing を、単なるカテゴリ記事より優先してください。弱い一致の結果を、この商品の事実として扱わないでください。",
     "JSONのみで返してください。product, market, customer, competitors, performance, acquisitionProblems, opportunities, priorities, nextActions, decision, nextPosts, searchEvidenceを必ず含めてください。",
     "decisionは「次に何をすべきか」の結論です。target, problem, desire, valueProposition, channel, format, testPlan, evidenceを必ず含めてください。",
     "nextPostsは最大3件。各項目にrank, concept, hook, format, channel, reason, testMetricを含め、互いに異なる仮説にしてください。",
     "hookは投稿冒頭で実際に使える具体的な一文にしてください。",
-    "searchEvidenceは判断に使った検索結果を最大10件、query/category/title/url/snippet付きで返してください。",
+    "searchEvidenceは判断に使った検索結果を最大10件、query/category/title/url/snippet/evidenceType/matchType/relevanceScore付きで返してください。",
     "情報不足なら推測で埋めず、何を検証すべきかを明示してください。",
   ].join("\n\n");
 }
