@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { consumeMonthlyUsage, getUserFromBearer, refundMonthlyUsage } from "@/lib/billing";
+import { generateHiggsfieldVideo } from "@/lib/video/higgsfield";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -66,13 +67,33 @@ export async function POST(request: Request) {
     if (jobError || !job) throw new Error(jobError?.message || "production jobの作成に失敗しました。");
     jobId = job.id;
 
+    // オンデマンド生成はCron待ちにしない。ここでHiggsfieldの非同期生成を開始し、
+    // request_idをDBへ保存したらHTTPレスポンスを返す。完成確認はGET endpointで行う。
+    const started = await generateHiggsfieldVideo({
+      prompt,
+      model: model ?? process.env.HF_VIDEO_MODEL ?? "alibaba/wan-3.0/text-to-video",
+      duration,
+      resolution,
+      aspectRatio,
+      generateAudio,
+    });
+    const requestId = String(started.request_id ?? started.requestId ?? started.id ?? "");
+    if (!requestId) throw new Error("Higgsfieldからrequest_idを取得できませんでした。");
 
+    await admin.from("production_jobs").update({
+      status: "running",
+      request_id: requestId,
+      provider_response: { started_response: started },
+      started_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", job.id).eq("user_id", user.id);
 
     return NextResponse.json({
       ok: true,
       jobId,
-      status: "queued",
-      message: "動画生成Jobをキューに入れました。Workerがバックグラウンドで生成します。"
+      requestId,
+      status: "running",
+      message: "Higgsfieldで動画生成を開始しました。完成まで自動で確認します。"
     }, { status: 202 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "動画生成の開始に失敗しました。";
