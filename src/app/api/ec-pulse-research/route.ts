@@ -13,7 +13,31 @@ type PainPoint = {
 };
 
 function cleanQuery(value: string) {
-  return value.replace(/[\r\n]/g, " ").trim().slice(0, 180);
+  return value.replace(/[\\r\\n]/g, " ").trim().slice(0, 180);
+}
+
+async function fetchPageTitle(url: string) {
+  try {
+    const response = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 AI-Acquisition-Search/1.0" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!response.ok) return "";
+    const html = await response.text();
+    const match = html.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i);
+    if (!match?.[1]) return "";
+    return match[1]
+      .replace(/&amp;/gi, "&")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\\s+/g, " ")
+      .trim()
+      .slice(0, 180);
+  } catch {
+    return "";
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -58,6 +82,20 @@ export async function POST(request: NextRequest) {
     const research = ingest.results?.[0] ?? null;
     const runId = research?.trend?.run_id ?? null;
     const painPoints: PainPoint[] = research?.analysis?.pain_points ?? [];
+
+    const researchProductTitle = [
+      research?.product_title,
+      research?.title,
+      research?.product?.title,
+      research?.product?.name,
+      research?.source?.title,
+      research?.metadata?.product_title
+    ].find((value) => typeof value === "string" && value.trim());
+
+    const pageTitle = typeof researchProductTitle === "string"
+      ? researchProductTitle
+      : await fetchPageTitle(url);
+
     const queries = [
       ...painPoints.slice(0, 3).map((item) => item.pain),
       research?.analysis?.recommended_angle,
@@ -67,7 +105,39 @@ export async function POST(request: NextRequest) {
     const uniqueQueries = [...new Set(queries)].slice(0, 3);
     const products: Array<Record<string, unknown>> = [];
 
+    async function searchProducts(query: string) {
+      const response = await fetch(EC_PULSE_API_URL + "/v1/products/search", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          query,
+          marketplaces: ["amazon", "rakuten", "yahoo"],
+          limit: 5
+        }),
+        cache: "no-store"
+      });
+      if (!response.ok) return;
+      const data = await response.json().catch(() => null);
+      for (const item of data?.results ?? []) {
+        products.push({
+          title: item.title ?? item.product?.product?.title ?? item.product?.title ?? "",
+          url: item.url ?? item.product?.source?.url ?? item.source?.url ?? "",
+          price: item.price ?? item.product?.pricing?.price ?? item.pricing?.price ?? null,
+          currency: item.currency ?? item.product?.pricing?.currency ?? item.pricing?.currency ?? "",
+          marketplace: item.marketplace ?? item.product?.source?.marketplace ?? item.source?.marketplace ?? null,
+          product_id: item.product_id ?? item.product?.source?.product_id ?? item.source?.product_id ?? null,
+          query
+        });
+      }
+    }
+
     for (const query of uniqueQueries) {
+      await searchProducts(query);
+    }
+
+    if (products.length === 0 && pageTitle) {
+      await searchProducts(cleanQuery(pageTitle));
+    }
       const response = await fetch(EC_PULSE_API_URL + "/v1/products/search", {
         method: "POST",
         headers,
