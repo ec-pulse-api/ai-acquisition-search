@@ -13,6 +13,7 @@ export async function POST(request: Request) {
   let planId = "";
   let creativeId = "";
   let socialPostId = "";
+  let productionJobId = "";
 
   try {
     const body = await request.json() as { source?: AcquisitionAnalyzeResult["source"]; analysis?: AcquisitionAnalyzeResult["analysis"] };
@@ -72,16 +73,46 @@ export async function POST(request: Request) {
     }).select("id").single();
     if (creativeError) throw creativeError;
     creativeId = creative.id;
+    const network = String(firstPost?.channel || decision.channel || "tiktok").toLowerCase();
     const { data: socialPost, error: socialPostError } = await db.from("social_posts").insert({
       creative_id: creative.id,
       user_id: user.id,
-      network: firstPost?.channel || decision.channel,
-      status: "planned",
+      network,
+      status: "scheduled",
       caption: firstPost?.hook || decision.valueProposition,
-      metadata: { plan_id: plan.id, hypothesis: decision.testPlan, operator_patrol_status: "active", operator_managed: true },
+      metadata: { plan_id: plan.id, hypothesis: decision.testPlan, operator_patrol_status: "active", operator_managed: true, auto_publish: true },
     }).select("id").single();
     if (socialPostError) throw socialPostError;
     socialPostId = socialPost.id;
+
+    // 初回テストも巡回チェーンの外に置かない。
+    // ここで動画ジョブをキューへ入れ、Cron Workerが生成→公開まで進める。
+    const prompt = [
+      "Create the first short-form advertising video for iterative acquisition testing.",
+      "Product: " + String(source.productName || source.title || "商品・サービス"),
+      "Hook: " + String(firstPost?.hook || decision.valueProposition || ""),
+      "Concept: " + String(firstPost?.concept || decision.testPlan || ""),
+      "Target: " + String(decision.target || ""),
+      "Network: " + network,
+      "Format: " + String(firstPost?.format || decision.format || "short-form"),
+      "Use natural UGC-style visuals, 9:16, clear first 3 seconds, no fake claims, no watermark, no platform UI."
+    ].join("\n");
+
+    const { data: productionJob, error: productionJobError } = await db.from("production_jobs").insert({
+      user_id: user.id,
+      social_post_id: socialPost.id,
+      creative_id: creative.id,
+      provider: "higgsfield",
+      model: process.env.HF_VIDEO_MODEL || "alibaba/wan-3.0/text-to-video",
+      status: "queued",
+      prompt,
+      duration: 5,
+      resolution: "1080p",
+      aspect_ratio: "9:16",
+      generate_audio: false,
+    }).select("id").single();
+    if (productionJobError || !productionJob) throw productionJobError || new Error("初回動画生成ジョブの作成に失敗しました。");
+    productionJobId = productionJob.id;
 
     const { data: run, error: runError } = await db.from("operator_runs").insert({
       product_id: productId,
@@ -95,12 +126,13 @@ export async function POST(request: Request) {
     }).select("id").single();
     if (runError) throw runError;
 
-    return NextResponse.json({ ok: true, planId: plan.id, runId: run.id, socialPostId: socialPost.id, message: "広告テスト仮説を保存しました。結果を入力すると次のテストにつなげられます。" });
+    return NextResponse.json({ ok: true, planId: plan.id, runId: run.id, socialPostId: socialPost.id, productionJobId, message: "初回広告テストを動画生成キューへ登録しました。Workerが生成・公開し、巡回を開始します。" });
   } catch (error) {
     // このAPIは複数テーブルへ順番に書き込むため、後段失敗時に
     // 中途半端なテスト計画だけを残さない。既存productは絶対に削除しない。
     try {
       const db = getAdminSupabase();
+      if (productionJobId) await db.from("production_jobs").delete().eq("id", productionJobId).eq("user_id", user.id);
       if (socialPostId) await db.from("social_posts").delete().eq("id", socialPostId).eq("user_id", user.id);
       if (creativeId) await db.from("creatives").delete().eq("id", creativeId).eq("user_id", user.id);
       if (planId) await db.from("acquisition_plans").delete().eq("id", planId).eq("user_id", user.id);
