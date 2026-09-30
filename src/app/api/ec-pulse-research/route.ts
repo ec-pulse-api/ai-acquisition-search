@@ -13,7 +13,7 @@ type PainPoint = {
 };
 
 function cleanQuery(value: string) {
-  return value.replace(/[\\r\\n]/g, " ").trim().slice(0, 180);
+  return value.replace(/[\r\n]/g, " ").trim().slice(0, 180);
 }
 
 async function fetchPageTitle(url: string) {
@@ -25,14 +25,14 @@ async function fetchPageTitle(url: string) {
     });
     if (!response.ok) return "";
     const html = await response.text();
-    const match = html.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i);
+    const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
     if (!match?.[1]) return "";
     return match[1]
       .replace(/&amp;/gi, "&")
       .replace(/&quot;/gi, '"')
       .replace(/&#39;/gi, "'")
       .replace(/<[^>]+>/g, " ")
-      .replace(/\\s+/g, " ")
+      .replace(/\s+/g, " ")
       .trim()
       .slice(0, 180);
   } catch {
@@ -137,30 +137,6 @@ export async function POST(request: NextRequest) {
 
     if (products.length === 0 && pageTitle) {
       await searchProducts(cleanQuery(pageTitle));
-    }
-      const response = await fetch(EC_PULSE_API_URL + "/v1/products/search", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          query,
-          marketplaces: ["amazon", "rakuten", "yahoo"],
-          limit: 5
-        }),
-        cache: "no-store"
-      });
-      if (!response.ok) continue;
-      const data = await response.json().catch(() => null);
-      for (const item of data?.results ?? []) {
-        products.push({
-          title: item.title ?? item.product?.product?.title ?? item.product?.title ?? "",
-          url: item.url ?? item.product?.source?.url ?? item.source?.url ?? "",
-          price: item.price ?? item.product?.pricing?.price ?? item.pricing?.price ?? null,
-          currency: item.currency ?? item.product?.pricing?.currency ?? item.pricing?.currency ?? "",
-          marketplace: item.marketplace ?? item.product?.source?.marketplace ?? item.source?.marketplace ?? null,
-          product_id: item.product_id ?? item.product?.source?.product_id ?? item.source?.product_id ?? null,
-          query
-        });
-      }
     }
 
     const seen = new Set<string>();
