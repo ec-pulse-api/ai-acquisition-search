@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       network: firstPost?.channel || decision.channel,
       status: "planned",
       caption: firstPost?.hook || decision.valueProposition,
-      metadata: { plan_id: plan.id, hypothesis: decision.testPlan },
+      metadata: { plan_id: plan.id, hypothesis: decision.testPlan, operator_patrol_status: "active", operator_managed: true },
     }).select("id").single();
     if (socialPostError) throw socialPostError;
     socialPostId = socialPost.id;
