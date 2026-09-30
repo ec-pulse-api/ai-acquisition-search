@@ -14,9 +14,9 @@ on:
       - "README-CLAUDE-CODE.md"
       - ".github/workflows/claude-plugin.yml"
   pull_request:
-      - "skills/**"
     paths:
       - ".claude-plugin/**"
+      - "skills/**"
       - ".mcp.json"
       - "src/mcp/**"
       - "src/lib/video/**"
@@ -24,6 +24,8 @@ on:
       - "package-lock.json"
       - "README-CLAUDE-CODE.md"
       - ".github/workflows/claude-plugin.yml"
+
+  # validate changes to the plugin package
 
 jobs:
   validate:
