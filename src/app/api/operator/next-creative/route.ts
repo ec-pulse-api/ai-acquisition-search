@@ -161,6 +161,8 @@ export async function POST(request: Request) {
         iteration_angle: angle,
         test_metric: body.testMetric || "CTR / CVR / ROAS",
         auto_publish: true,
+        operator_patrol_status: "active",
+        operator_managed: true,
       }
     }).select("id,network,status,caption,metadata").single();
     if (nextPostError || !nextPost) throw new Error(nextPostError?.message || "次の投稿レコード作成に失敗しました。");
