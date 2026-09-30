@@ -1,4 +1,4 @@
-﻿import type { AcquisitionAnalysis, PageSnapshot } from "./types";
+import type { AcquisitionAnalysis, PageSnapshot } from "./types";
 import { buildAcquisitionPrompt } from "./prompts";
 import type { WebSearchResult } from "./search-web";
 import type { SocialSignal } from "./social-search";
@@ -156,6 +156,7 @@ function fallback(
     ],
     socialSignals,
     shopSignals,
+    evidenceTensions: detectEvidenceTensions(webResults.results),
     searchEvidence: webResults.results.slice(0, 10),
     aiConnected: false,
   };
@@ -299,6 +300,11 @@ export async function analyzePage(
     socialSignals: arr(parsed.socialSignals, base.socialSignals),
 
     shopSignals: arr(parsed.shopSignals, base.shopSignals),
+
+    evidenceTensions: arr(
+      parsed.evidenceTensions,
+      base.evidenceTensions
+    ),
 
     searchEvidence: arr(
       parsed.searchEvidence,
