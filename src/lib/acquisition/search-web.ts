@@ -35,6 +35,29 @@ function extractBingResults(html: string, limit: number, query: string, category
   return results;
 }
 
+function relevanceScore(result: WebSearchResult, productName: string, productCategory: string, query: string) {
+  const text = `${result.title} ${result.snippet} ${result.url}`.toLowerCase();
+  const product = productName.toLowerCase().trim();
+  const category = productCategory.toLowerCase().trim();
+  const tokens = product.split(/[^\\p{L}\\p{N}]+/u).filter((x) => x.length >= 2);
+  let score = 0;
+
+  if (product && text.includes(product)) score += 18;
+  for (const token of tokens) if (text.includes(token)) score += 3;
+  if (category && text.includes(category)) score += 5;
+  if (result.snippet.length >= 40) score += 2;
+
+  const url = result.url.toLowerCase();
+  if (/amazon\\.|rakuten\\.|yahoo\\.|kakaku\\.|price\\./.test(url)) score += 2;
+  if (/まとめ|ランキング|おすすめ|比較/.test(result.title)) score += 1;
+
+  // Reject pages that only happen to match a single generic term.
+  const matchedTokens = tokens.filter((token) => text.includes(token)).length;
+  if (tokens.length >= 2 && matchedTokens === 1 && !text.includes(product)) score -= 12;
+
+  return score;
+}
+
 export async function searchWeb(query: string, limit = 5, category: SearchEvidenceCategory = "market"): Promise<WebSearchResult[]> {
   const url = "https://www.bing.com/search?q=" + encodeURIComponent(query) + "&setlang=ja-JP&cc=JP";
   const controller = new AbortController();
@@ -76,16 +99,30 @@ export async function discoverAcquisitionSignals(input: AcquisitionSearchInput):
   const context = category && !base.includes(category) ? base + " " + category : base;
 
   const searches: { query: string; category: SearchEvidenceCategory }[] = [
-    { query: context + " 口コミ 評判 悩み", category: "customer_pain" },
-    { query: context + " 欲しい 理由 メリット", category: "customer_desire" },
-    { query: context + " おすすめ 比較 競合", category: "competitor" },
-    { query: context + " 市場 トレンド 人気", category: "market" },
-    { query: context + " TikTok Instagram YouTube 投稿", category: "channel" },
+    { query: `"${base}" 口コミ 評判 レビュー`, category: "customer_pain" },
+    { query: `"${base}" 欲しい メリット デメリット`, category: "customer_desire" },
+    { query: `"${base}" 比較 代替品 競合`, category: "competitor" },
+    { query: `"${base}" 市場 トレンド 販売`, category: "market" },
+    { query: `"${base}" TikTok Instagram YouTube`, category: "channel" },
   ];
 
-  const groups = await Promise.all(searches.map((item) => searchWeb(item.query, 5, item.category)));  const results = groups.flat().filter((result, index, all) =>
-    all.findIndex((x) => x.url === result.url) === index
-  ).slice(0, 25);
+  const groups = await Promise.all(
+    searches.map((item) => searchWeb(item.query, 10, item.category))
+  );
+
+  const results = groups
+    .flat()
+    .filter((result, index, all) =>
+      all.findIndex((x) => x.url === result.url) === index
+    )
+    .map((result) => ({
+      result,
+      score: relevanceScore(result, base, category, result.query),
+    }))
+    .filter(({ score }) => score >= 3)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 30)
+    .map(({ result }) => result);
 
   return { queries: searches.map((x) => x.query), results };
 }

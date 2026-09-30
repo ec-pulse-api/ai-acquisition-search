@@ -33,29 +33,6 @@ function fallback(
       valueProposition: source.headings.slice(0, 5),
       evidence,
     },
-    productQuality: {
-      summary: "商品ページと公開された市場シグナルから品質を確認しました。未確認の性能や耐久性は断定しません。",
-      qualitySignals: [
-        ...shopSignals
-          .filter((x) => x.rating !== null || x.reviewCount !== null)
-          .slice(0, 5)
-          .map((x) => `${x.title}: rating=${x.rating ?? "未取得"}, reviews=${x.reviewCount ?? "未取得"}`),
-        ...(source.productBrand ? [`ブランド: ${source.productBrand}`] : []),
-        ...(source.productCategory ? [`カテゴリ: ${source.productCategory}`] : []),
-      ],
-      strengths: [],
-      concerns: [],
-      confidence: shopSignals.some((x) => x.rating !== null && x.reviewCount !== null) ? "medium" : "low",
-      evidence: [
-        ...evidence,
-        ...shopSignals.slice(0, 5).map((x) => x.title),
-      ].slice(0, 10),
-      missingData: [
-        "第三者による品質試験・認証",
-        "耐久性・長期使用データ",
-        "返品率・不良率",
-      ],
-    },
     market: {
       summary: "市場規模・成長率などの外部データは未取得です。",
       signals: source.headings.slice(0, 6),
@@ -241,7 +218,6 @@ export async function analyzePage(
       : fallbackValue;
 
   const product = obj(parsed.product, base.product);
-  const productQuality = obj(parsed.productQuality, base.productQuality);
   const market = obj(parsed.market, base.market);
   const customer = obj(parsed.customer, base.customer);
   const competitors = obj(parsed.competitors, base.competitors);
@@ -259,21 +235,6 @@ export async function analyzePage(
         base.product.valueProposition
       ),
       evidence: arr(product.evidence, base.product.evidence),
-    },
-
-    productQuality: {
-      ...productQuality,
-      qualitySignals: arr(productQuality.qualitySignals, base.productQuality.qualitySignals),
-      strengths: arr(productQuality.strengths, base.productQuality.strengths),
-      concerns: arr(productQuality.concerns, base.productQuality.concerns),
-      evidence: arr(productQuality.evidence, base.productQuality.evidence),
-      missingData: arr(productQuality.missingData, base.productQuality.missingData),
-      confidence:
-        productQuality.confidence === "high" ||
-        productQuality.confidence === "medium" ||
-        productQuality.confidence === "low"
-          ? productQuality.confidence
-          : base.productQuality.confidence,
     },
 
     market: {
