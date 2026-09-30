@@ -39,6 +39,12 @@ export default function Home() {
   const [socialPostId, setSocialPostId] = useState("");
   const [researchHistory, setResearchHistory] = useState<EcPulseResearchRun[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [videoPrompt, setVideoPrompt] = useState("");
+  const [videoGenerating, setVideoGenerating] = useState(false);
+  const [videoJobId, setVideoJobId] = useState("");
+  const [videoStatus, setVideoStatus] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [videoError, setVideoError] = useState("");
   async function getAccessToken() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -67,6 +73,15 @@ export default function Home() {
       if (!res.ok) throw new Error(data.error || "分析に失敗しました。");
 
       setResult(data.data);
+      const decision = data.data?.analysis?.decision;
+      const firstPost = data.data?.analysis?.nextPosts?.[0];
+      setVideoPrompt([
+        data.data?.source?.title || "商品",
+        decision?.valueProposition ? "訴求: " + decision.valueProposition : "",
+        firstPost?.hook ? "Hook: " + firstPost.hook : "",
+        decision?.format ? "形式: " + decision.format : "9:16 short-form ad",
+        "Natural UGC-style product advertising, clear first 3 seconds, factual claims only, no watermark.",
+      ].filter(Boolean).join("\n"));
       setEcPulse(null);
       setEcPulseLoading(true);
       try {
@@ -133,6 +148,49 @@ export default function Home() {
     }
   }
 
+  async function generateVideo() {
+    setVideoGenerating(true);
+    setVideoError("");
+    setVideoUrl("");
+    setVideoStatus("生成ジョブを開始中…");
+    try {
+      const token = await getAccessToken();
+      const response = await fetch("/api/video/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ prompt: videoPrompt.trim(), duration: 5, resolution: "1080p", aspectRatio: "9:16", generateAudio: false }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "動画生成の開始に失敗しました。");
+      const jobId = String(body.jobId || "");
+      if (!jobId) throw new Error("動画ジョブIDを取得できませんでした。");
+      setVideoJobId(jobId);
+      setVideoStatus("Higgsfieldで生成中…");
+      for (let attempt = 0; attempt < 60; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 2000 : 5000));
+        const pollToken = await getAccessToken();
+        const poll = await fetch("/api/video/jobs/" + encodeURIComponent(jobId), {
+          headers: { Authorization: "Bearer " + pollToken },
+          cache: "no-store",
+        });
+        const data = await poll.json().catch(() => ({}));
+        if (!poll.ok) throw new Error(data.error || "動画生成状態の取得に失敗しました。");
+        if (data.job?.status === "completed" && data.asset?.video_url) {
+          setVideoUrl(data.asset.video_url);
+          setVideoStatus("動画が完成しました。");
+          return;
+        }
+        if (data.job?.status === "failed") throw new Error(data.job?.error || "Higgsfieldで動画生成に失敗しました。");
+        setVideoStatus("Higgsfieldで生成中… " + (attempt + 1) + "/60");
+      }
+      throw new Error("動画生成がタイムアウトしました。時間を置いてジョブを再確認してください。");
+    } catch (err) {
+      setVideoError(err instanceof Error ? err.message : "動画生成に失敗しました。");
+      setVideoStatus("");
+    } finally {
+      setVideoGenerating(false);
+    }
+  }
   async function saveMetrics() {
     try {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -482,6 +540,30 @@ export default function Home() {
             </Section>
           )}
 
+          <section className="next video-generator">
+            <p className="eyebrow">AI VIDEO CREATOR</p>
+            <h2>このサイトだけで広告動画を作る</h2>
+            <p className="hint">分析結果をもとに9:16広告動画をHiggsfield APIで生成します。HiggsfieldやCloud Codeをユーザー側で起動する必要はありません。</p>
+            <textarea
+              value={videoPrompt}
+              onChange={(e) => setVideoPrompt(e.target.value)}
+              placeholder="動画の内容・Hook・訴求を入力"
+              rows={5}
+              style={{ width: "100%", marginTop: 12, padding: 14, borderRadius: 12, background: "#101012", color: "#fff", border: "1px solid #29292e" }}
+            />
+            <button type="button" onClick={generateVideo} disabled={videoGenerating || !videoPrompt.trim()}>
+              {videoGenerating ? "動画生成中..." : "🎬 動画を生成"}
+            </button>
+            {videoStatus && <p className="hint">{videoStatus}</p>}
+            {videoJobId && <small className="hint">Job: {videoJobId}</small>}
+            {videoError && <p className="error">{videoError}</p>}
+            {videoUrl && (
+              <div style={{ marginTop: 16 }}>
+                <video src={videoUrl} controls playsInline style={{ width: "100%", maxWidth: 420, borderRadius: 16, background: "#000" }} />
+                <p style={{ marginTop: 10 }}><a href={videoUrl} target="_blank" rel="noreferrer">完成動画を開く →</a></p>
+              </div>
+            )}
+          </section>
           <section className="next performance-loop">
             <p className="eyebrow">PERFORMANCE LOOP</p>
             <h2>投稿結果を入れて、次の判断へ</h2>
