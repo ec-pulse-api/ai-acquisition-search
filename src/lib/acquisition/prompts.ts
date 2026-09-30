@@ -54,7 +54,7 @@ export function buildAcquisitionPrompt(
     "decisionは「次に何をすべきか」の結論です。target, problem, desire, valueProposition, channel, format, testPlan, evidenceを必ず含めてください。",
     "nextPostsは最大3件。各項目にrank, concept, hook, format, channel, reason, testMetricを含め、互いに異なる仮説にしてください。",
     "hookは投稿冒頭で実際に使える具体的な一文にしてください。",
-    "searchEvidenceは判断に使った検索結果を最大10件、query/category/title/url/snippet/evidenceType/matchType/relevanceScore付きで返してください。",
+    "searchEvidenceは判断に使った検索結果を最大10件、query/category/title/url/snippet/evidenceType/matchType/relevanceScore付きで返してください。",\n    "evidenceTensionsには、同じ論点について肯定的証拠と否定的証拠が併存する場合を記録してください。statusは conflict または one_sided。conflict の論点は断定せず、追加検証または投稿テストの対象として扱ってください。",
     "情報不足なら推測で埋めず、何を検証すべきかを明示してください。",
   ].join("\n\n");
 }
