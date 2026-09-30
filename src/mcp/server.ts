@@ -20,7 +20,7 @@ import path from "node:path";
 function createServer(): McpServer {
   const server = new McpServer({
     name: "ai-acquisition-search",
-    version: "0.3.0"
+    version: "0.4.1"
   });
 
   server.registerTool(
