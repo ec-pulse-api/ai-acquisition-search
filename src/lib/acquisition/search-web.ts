@@ -62,7 +62,7 @@ function extractBingResults(html: string, limit: number, query: string, category
 
 function getDomain(url: string) {
   try {
-    return new URL(url).hostname.replace(/^www\\./i, "").toLowerCase();
+    return new URL(url).hostname.replace(/^www\./i, "").toLowerCase();
   } catch {
     return "";
   }
@@ -72,7 +72,7 @@ function classifyEvidence(result: WebSearchResult, productName: string, productC
   const text = `${result.title} ${result.snippet} ${result.url}`.toLowerCase();
   const product = productName.toLowerCase().trim();
   const category = productCategory.toLowerCase().trim();
-  const tokens = product.split(/[^\\p{L}\\p{N}]+/u).filter((x) => x.length >= 2);
+  const tokens = product.split(/[^\p{L}\p{N}]+/u).filter((x) => x.length >= 2);
   const domain = getDomain(result.url);
 
   const exact = product.length >= 3 && text.includes(product);
@@ -85,9 +85,9 @@ function classifyEvidence(result: WebSearchResult, productName: string, productC
   else if (category && text.includes(category)) matchType = "category";
 
   let evidenceType: SearchEvidenceType = "other";
-  if (/tiktok\\.com|instagram\\.com|youtube\\.com|youtu\\.be|x\\.com|twitter\\.com/.test(domain)) {
+  if (/tiktok\.com|instagram\.com|youtube\.com|youtu\.be|x\.com|twitter\.com/.test(domain)) {
     evidenceType = "social";
-  } else if (/amazon\\.|rakuten\\.|shopping\\.yahoo\\.|store\\.shopping\\.yahoo\\.|kakaku\\.|price\\./.test(domain)) {
+  } else if (/amazon\.|rakuten\.|shopping\.yahoo\.|store\\.shopping\.yahoo\.|kakaku\.|price\./.test(domain)) {
     evidenceType = "product_listing";
   } else if (/口コミ|レビュー|評判|クチコミ|体験談|質問|知恵袋/.test(text) || /review|reviews|qa|question|chiebukuro/.test(domain)) {
     evidenceType = "review";
@@ -159,7 +159,10 @@ export async function discoverAcquisitionSignals(input: AcquisitionSearchInput):
     .trim()
     .slice(0, 100);
   const category = (input.productCategory || "").replace(/\s+/g, " ").trim().slice(0, 50);
-  const context = category && !base.includes(category) ? base + " " + category : base;
+  const identifiers = (input.productSignals || [])
+    .filter((signal) => signal && signal.length >= 3)
+    .slice(0, 5)
+    .map((signal) => signal.replace(/\s+/g, " ").trim().slice(0, 80));
 
   const searches: { query: string; category: SearchEvidenceCategory }[] = [
     { query: `"${base}" 口コミ 評判 レビュー`, category: "customer_pain" },
@@ -177,7 +180,7 @@ export async function discoverAcquisitionSignals(input: AcquisitionSearchInput):
     searches.map((item) => searchWeb(item.query, 10, item.category))
   );
 
-  const results = groups
+  const ranked = groups
     .flat()
     .filter((result, index, all) =>
       all.findIndex((x) => x.url === result.url) === index
