@@ -1,21 +1,10 @@
 {
   "name": "ai-acquisition-search",
-  "version": "0.3.0",
-  "description": "Claude Code拡張機能。商品・サービスから集客戦略を発見し、クリエイティブ制作・SNS投稿・実績分析・次の施策までつなぐAI Brand Operator。",
+  "description": "AI acquisition decision engine with market research, ad-cycle planning, Higgsfield video generation, narration, and social performance tools.",
+  "version": "0.4.0",
   "author": {
-    "name": "shunai394-hash",
-    "url": "https://github.com/shunai394-hash"
+    "name": "EC Pulse API"
   },
-  "repository": "https://github.com/shunai394-hash/ai-acquisition-search",
-  "license": "MIT",
-  "keywords": [
-    "customer-acquisition",
-    "marketing",
-    "advertising",
-    "social-media",
-    "ai-agent",
-    "mcp",
-    "claude-code"
-  ],
-  "mcpServers": "./.mcp.json"
+  "repository": "https://github.com/ec-pulse-api/ai-acquisition-search",
+  "homepage": "https://github.com/ec-pulse-api/ai-acquisition-search"
 }
