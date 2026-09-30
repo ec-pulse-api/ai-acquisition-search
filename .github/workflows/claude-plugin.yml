@@ -9,6 +9,8 @@ on:
       - ".mcp.json"
       - "src/mcp/**"
       - "src/lib/video/**"
+      - "src/lib/acquisition/**"
+      - "src/app/api/analyze/**"
       - "package.json"
       - "package-lock.json"
       - "README-CLAUDE-CODE.md"
@@ -37,6 +39,10 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
       - name: Validate plugin
