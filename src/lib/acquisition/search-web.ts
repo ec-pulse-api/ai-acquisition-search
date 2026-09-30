@@ -180,7 +180,13 @@ export async function discoverAcquisitionSignals(input: AcquisitionSearchInput):
     { query: `"${base}" 比較 代替品 競合`, category: "competitor" },
     { query: `"${base}" 市場 トレンド 販売`, category: "market" },
     { query: `"${base}" TikTok Instagram YouTube`, category: "channel" },
-    ...(brand && brand.toLowerCase() !== base.toLowerCase() ? [{ query: `"${brand}" "${base}"`, category: "market" as SearchEvidenceCategory }] : []),
+    ...(brand && brand.toLowerCase() !== base.toLowerCase() ? [
+      { query: `"${brand}" "${base}"`, category: "market" as SearchEvidenceCategory },
+      { query: `"${brand}" "${base}" レビュー 口コミ`, category: "customer_pain" as SearchEvidenceCategory },
+    ] : []),
+    ...(sourceDomain && !/amazon\.|rakuten\.|shopping\.yahoo\.|tiktok\.com|instagram\.com|youtube\.com/.test(sourceDomain)
+      ? [{ query: `site:${sourceDomain} "${base}"`, category: "market" as SearchEvidenceCategory }]
+      : []),
     ...(identifiers.slice(0, 2).map((id) => ({
       query: `"${base}" "${id}"`,
       category: "market" as SearchEvidenceCategory,
@@ -208,7 +214,13 @@ export async function discoverAcquisitionSignals(input: AcquisitionSearchInput):
       };
     })
     .filter(({ score }) => score >= 8)
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (a.result.matchType !== b.result.matchType) {
+        return a.result.matchType === "exact_product" ? -1 : 1;
+      }
+      return a.result.sourceDomain.localeCompare(b.result.sourceDomain);
+    });
 
   // Keep the final set diverse: don't let one SEO domain fill the investigation.
   const domainCounts = new Map<string, number>();
