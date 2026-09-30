@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".claude-plugin/**"
+      - "skills/**"
       - ".mcp.json"
       - "src/mcp/**"
       - "src/lib/video/**"
