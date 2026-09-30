@@ -260,18 +260,36 @@ export async function discoverAcquisitionSignals(input: AcquisitionSearchInput):
     "market",
     "other",
   ];
+  const maxPerType = 6;
 
+  // First pass: guarantee that high-value evidence types can coexist.
   for (const type of typePriority) {
-    for (const item of ranked.filter((x) => x.result.evidenceType === type)) {
-      const count = domainCounts.get(item.result.sourceDomain) ?? 0;
+    const candidates = ranked.filter((x) => x.result.evidenceType === type);
+    for (const item of candidates) {
+      const domainCount = domainCounts.get(item.result.sourceDomain) ?? 0;
+      const typeCount = typeCounts.get(type) ?? 0;
       const maxPerDomain = item.result.matchType === "exact_product" ? 3 : 2;
-      if (count >= maxPerDomain) continue;
-      domainCounts.set(item.result.sourceDomain, count + 1);
-      typeCounts.set(type, (typeCounts.get(type) ?? 0) + 1);
+      if (domainCount >= maxPerDomain || typeCount >= maxPerType) continue;
+      domainCounts.set(item.result.sourceDomain, domainCount + 1);
+      typeCounts.set(type, typeCount + 1);
       results.push(item.result);
       if (results.length >= 30) break;
     }
     if (results.length >= 30) break;
+  }
+
+  // Second pass: use remaining high-confidence results only when a type had
+  // fewer than six usable sources. Never lower the relevance threshold to fill slots.
+  for (const item of ranked) {
+    if (results.length >= 30) break;
+    if (results.some((x) => x.url === item.result.url)) continue;
+    const domainCount = domainCounts.get(item.result.sourceDomain) ?? 0;
+    const typeCount = typeCounts.get(item.result.evidenceType) ?? 0;
+    const maxPerDomain = item.result.matchType === "exact_product" ? 3 : 2;
+    if (domainCount >= maxPerDomain || typeCount >= maxPerType) continue;
+    domainCounts.set(item.result.sourceDomain, domainCount + 1);
+    typeCounts.set(item.result.evidenceType, typeCount + 1);
+    results.push(item.result);
   }
 
   // Re-rank after diversity selection: evidence strength first, then identity.
