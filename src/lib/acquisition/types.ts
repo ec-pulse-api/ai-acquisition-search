@@ -1,11 +1,22 @@
 export type AcquisitionDecision = { target: string; problem: string; desire: string; valueProposition: string; channel: string; format: string; testPlan: string; evidence: string[] };
 
+export type ProductQuality = {
+  summary: string;
+  qualitySignals: string[];
+  strengths: string[];
+  concerns: string[];
+  confidence: "high" | "medium" | "low";
+  evidence: string[];
+  missingData: string[];
+};
+
 export type ShopSignal = { platform: "tiktok_shop"; title: string; url: string; price: number | null; currency: string; sales: number | null; rating: number | null; reviewCount: number | null; seller: string; query: string };
 
 export type SocialSignal = { platform: "tiktok"; title: string; url: string; author: string; views: number | null; likes: number | null; comments: number | null; shares: number | null; description: string; query: string };
 
 export type AcquisitionAnalysis = {
   product: { summary: string; valueProposition: string[]; evidence: string[] };
+  productQuality: ProductQuality;
   market: { summary: string; signals: string[] };
   customer: { summary: string; likelySegments: string[]; needs: string[] };
   competitors: { summary: string; signals: string[] };
