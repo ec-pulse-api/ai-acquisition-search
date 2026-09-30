@@ -1,0 +1,39 @@
+name: Claude Code Plugin Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".claude-plugin/**"
+      - ".mcp.json"
+      - "src/mcp/**"
+      - "src/lib/video/**"
+      - "package.json"
+      - "package-lock.json"
+      - "README-CLAUDE-CODE.md"
+      - ".github/workflows/claude-plugin.yml"
+  pull_request:
+    paths:
+      - ".claude-plugin/**"
+      - ".mcp.json"
+      - "src/mcp/**"
+      - "src/lib/video/**"
+      - "package.json"
+      - "package-lock.json"
+      - "README-CLAUDE-CODE.md"
+      - ".github/workflows/claude-plugin.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+      - name: Validate plugin
+        run: claude plugin validate .
