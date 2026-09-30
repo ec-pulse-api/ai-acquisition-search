@@ -14,6 +14,7 @@ on:
       - "README-CLAUDE-CODE.md"
       - ".github/workflows/claude-plugin.yml"
   pull_request:
+      - "skills/**"
     paths:
       - ".claude-plugin/**"
       - ".mcp.json"
