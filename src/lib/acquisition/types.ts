@@ -1,4 +1,4 @@
-export type AcquisitionDecision = { target: string; problem: string; desire: string; valueProposition: string; channel: string; format: string; testPlan: string; evidence: string[] };
+export type AcquisitionEvidenceTension = { topic: string; positiveEvidence: string[]; negativeEvidence: string[]; status: "conflict" | "one_sided" };\n\nexport type AcquisitionDecision = { target: string; problem: string; desire: string; valueProposition: string; channel: string; format: string; testPlan: string; evidence: string[] };
 
 export type ShopSignal = { platform: "tiktok_shop"; title: string; url: string; price: number | null; currency: string; sales: number | null; rating: number | null; reviewCount: number | null; seller: string; query: string };
 
@@ -18,7 +18,7 @@ export type AcquisitionAnalysis = {
   decision: AcquisitionDecision;
   socialSignals: SocialSignal[];
   shopSignals: ShopSignal[];
-  searchEvidence: { query: string; category: "customer_pain" | "customer_desire" | "competitor" | "market" | "channel"; title: string; url: string; snippet: string }[];
+  searchEvidence: { query: string; category: "customer_pain" | "customer_desire" | "competitor" | "market" | "channel"; title: string; url: string; snippet: string }[];\n  evidenceTensions: AcquisitionEvidenceTension[];
   aiConnected: boolean;
 };
 export type PageSnapshot = { url: string; title: string; description: string; headings: string[]; text: string; links: string[]; productSignals: string[]; productName?: string; productBrand?: string; productCategory?: string };
